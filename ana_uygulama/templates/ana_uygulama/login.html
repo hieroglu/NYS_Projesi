@@ -1,0 +1,295 @@
+<!-- ana_uygulama/templates/ana_uygulama/login.html -->
+{% load static %}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Giriş Yap - Nakliye Yönetim Sistemi</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2c3e50;
+            --accent-color: #e74c3c;
+            --light-gray: #ecf0f1;
+            --dark-text: #34495e;
+            --body-bg: #f0f2f5; /* Login sayfası için özel arka plan */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: var(--body-bg);
+            color: var(--dark-text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .login-wrapper {
+            display: flex;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            max-width: 800px; /* Konteyner genişliği */
+            width: 100%;
+        }
+
+        .login-image-section {
+            flex-basis: 45%; /* Resim bölümünün genişliği */
+            background: url("{% static 'ana_uygulama/images/login-bg.jpg' %}") no-repeat center center; /* Arka plan resmi */
+            background-size: cover;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            padding: 40px;
+            text-align: center;
+            position: relative; /* Overlay için */
+        }
+        .login-image-section::before { /* Resim üzerine hafif bir karartma */
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(44, 62, 80, 0.5); /* var(--secondary-color) %50 opacity */
+            z-index: 1;
+        }
+
+        .login-image-section .logo-icon,
+        .login-image-section h1,
+        .login-image-section p {
+            position: relative; /* Overlay'in üzerinde kalması için */
+            z-index: 2;
+        }
+
+
+        .login-image-section .logo-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+
+        .login-image-section h1 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+        .login-image-section p {
+            font-size: 0.95em;
+            opacity: 0.9;
+        }
+
+
+        .login-form-section {
+            flex-basis: 55%; /* Form bölümünün genişliği */
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .login-form-section h2 {
+            font-size: 1.6em;
+            color: var(--dark-text);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .login-form-section .form-subtitle {
+            font-size: 0.9em;
+            color: #777;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group .input-icon {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(calc(-50% + 10px)); /* Etiket yüksekliğini hesaba katmak için ince ayar */
+            color: #aaa;
+            font-size: 1em;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="password"] {
+            width: 100%;
+            padding: 12px 15px 12px 40px; /* Solda ikon için boşluk */
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 0.95em;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group input[type="password"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-button i {
+            margin-right: 8px;
+        }
+
+        .login-button:hover {
+            background-color: #2980b9; /* Mavi'nin koyu tonu */
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border: 1px solid #f5c6cb;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            text-align: center;
+        }
+        .error-message ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .extra-links {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 0.85em;
+        }
+        .extra-links a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .extra-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Küçük ekranlar için */
+        @media (max-width: 768px) {
+            .login-wrapper {
+                flex-direction: column;
+                max-width: 400px; /* Tek sütunda daha dar */
+            }
+            .login-image-section {
+                flex-basis: auto; /* Otomatik yükseklik */
+                min-height: 200px; /* Minimum yükseklik */
+                padding: 30px;
+            }
+            .login-form-section {
+                padding: 30px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-image-section">
+            <i class="fas fa-truck-moving logo-icon"></i>
+            <h1>Nakliye Yönetim Sistemi</h1>
+            <p>Tedarik zincirinizi kolaylaştırın, operasyonlarınızı optimize edin.</p>
+        </div>
+        <div class="login-form-section">
+            <h2>Sisteme Giriş</h2>
+            <p class="form-subtitle">Hesabınıza erişmek için bilgilerinizi girin.</p>
+
+            {% if form.non_field_errors or form.errors %}
+                <div class="error-message">
+                    <p>Giriş başarısız. Lütfen bilgilerinizi kontrol edin.</p>
+                    {# Detaylı hataları göstermek isterseniz:
+                    {% for field, errors in form.errors.items %}
+                        {% for error in errors %}
+                            {{ error }}<br>
+                        {% endfor %}
+                    {% endfor %}
+                    {{ form.non_field_errors }}
+                    #}
+                </div>
+            {% endif %}
+
+            {% if next and not user.is_authenticated %}
+                <div class="error-message" style="background-color: #fff3cd; color: #856404; border-color: #ffeeba;">
+                    Bu sayfayı görüntülemek için giriş yapmanız gerekmektedir.
+                </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'ana_uygulama:login' %}">
+                {% csrf_token %}
+                
+                <div class="form-group">
+                    <label for="{{ form.username.id_for_label }}">Kullanıcı Adı</label>
+                    <i class="fas fa-user input-icon"></i>
+                    {{ form.username }}
+                </div>
+
+                <div class="form-group">
+                    <label for="{{ form.password.id_for_label }}">Şifre</label>
+                    <i class="fas fa-lock input-icon"></i>
+                    {{ form.password }}
+                </div>
+                
+                <button type="submit" class="login-button">
+                    <i class="fas fa-sign-in-alt"></i> Giriş Yap
+                </button>
+                <input type="hidden" name="next" value="{{ next }}">
+            </form>
+
+            <div class="extra-links">
+                <!-- <a href="#">Şifremi Unuttum?</a> -->
+                <!-- Gerekirse kayıt olma linki eklenebilir -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Inputlara focus olduğunda ikon rengini değiştirme gibi küçük JS eklenebilir
+        const inputs = document.querySelectorAll('.form-group input[type="text"], .form-group input[type="password"]');
+        inputs.forEach(input => {
+            const icon = input.previousElementSibling; // ikonu input'tan önce tanımladık
+             if (icon && icon.classList.contains('input-icon')) {
+                input.addEventListener('focus', () => {
+                    icon.style.color = 'var(--primary-color)';
+                });
+                input.addEventListener('blur', () => {
+                    icon.style.color = '#aaa';
+                });
+            }
+        });
+    </script>
+</body>
+</html>

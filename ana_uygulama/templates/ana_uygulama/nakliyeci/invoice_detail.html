@@ -1,0 +1,123 @@
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/invoice_detail.html #}
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">{{ invoice.invoice_number }} Detayı</h1>
+        <div class="btn-group" role="group" aria-label="Fatura İşlemleri">
+            <a href="{% url 'ana_uygulama:invoice_update_nakliyeci' pk=invoice.pk %}" class="btn btn-info btn-sm me-2" title="Düzenle">
+                <i class="fas fa-edit"></i> Düzenle
+            </a>
+            <a href="{% url 'ana_uygulama:invoice_delete_nakliyeci' pk=invoice.pk %}" class="btn btn-danger btn-sm" title="Sil">
+                <i class="fas fa-trash-alt"></i> Sil
+            </a>
+        </div>
+    </div>
+
+    {% include 'ana_uygulama/includes/messages.html' %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Fatura Bilgileri</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <strong>Fatura Numarası:</strong> {{ invoice.invoice_number }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Fatura Tipi:</strong> {{ invoice.get_invoice_type_display }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Faturalayan Nakliyeci:</strong> {{ invoice.issued_by_shipper.name }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Faturalanan Fabrika:</strong> {{ invoice.billed_to_factory.name }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Düzenleme Tarihi:</strong> {{ invoice.issue_date|date:"d M Y" }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Vade Tarihi:</strong> {{ invoice.due_date|date:"d M Y" }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Net Tutar (KDV Hariç):</strong> {{ invoice.total_amount|floatformat:2 }} TL
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>KDV Oranı (%):</strong> {{ invoice.vat_rate|floatformat:2 }} %
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Toplam KDV Tutarı:</strong> {{ invoice.total_vat_amount|floatformat:2 }} TL
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Toplam Tutar (KDV Dahil):</strong> <strong class="text-primary">{{ invoice.total_amount|floatformat:2 }} TL</strong>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Durum:</strong> 
+                    <span class="badge {% if invoice.status == 'PAID' %}bg-success{% elif invoice.status == 'SENT' %}bg-primary{% elif invoice.status == 'PARTIALLY_PAID' %}bg-warning text-dark{% elif invoice.status == 'VOID' %}bg-danger{% else %}bg-secondary{% endif %}">
+                        {{ invoice.get_status_display }}
+                    </span>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Oluşturulma Tarihi:</strong> {{ invoice.created_at|date:"d M Y H:i" }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Son Güncelleme:</strong> {{ invoice.updated_at|date:"d M Y H:i" }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if invoice.shipment %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">İlişkili Sevkiyat Bilgileri</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <strong>Sevkiyat ID:</strong> <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci' shipment_id=invoice.shipment.pk %}">{{ invoice.shipment.pk }}</a>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Yükleme Yeri:</strong> {{ invoice.shipment.origin }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Teslimat Yeri:</strong> {{ invoice.shipment.destination }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Yük Açıklaması:</strong> {{ invoice.shipment.load_description }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Atanan Araç:</strong> 
+                    {% if invoice.shipment.assigned_vehicle %}
+                        <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=invoice.shipment.assigned_vehicle.pk %}">
+                            {{ invoice.shipment.assigned_vehicle.plate_number }}
+                        </a>
+                    {% else %}
+                        Atanmadı
+                    {% endif %}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Sevkiyat Durumu:</strong> {{ invoice.shipment.get_status_display }}
+                </div>
+                <div class="col-md-6 mb-3">
+                    <strong>Sevkiyat İçin Fabrikaya Kesilen Fiyat:</strong> {{ invoice.shipment.price_for_factory|floatformat:2 }} TL
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{% url 'ana_uygulama:invoice_list_nakliyeci' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Faturalar Listesine Geri Dön
+        </a>
+    </div>
+
+</div>
+{% endblock content %}

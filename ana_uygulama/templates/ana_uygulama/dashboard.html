@@ -1,0 +1,404 @@
+{# ana_uygulama/templates/ana_uygulama/dashboard.html #}
+{% extends "base.html" %}
+{% load static %}
+{% load ana_uygulama_filters %} {# Özel filtreleriniz varsa (örn: is_shipper) #}
+{% load humanize %} {# Sayıları formatlamak için (örn: 1.000 TL) #}
+
+{% block page_title %}Kontrol Paneli{% endblock page_title %}
+
+{% block extra_head %}
+    {# FontAwesome Icons CDN zaten base.html'de var, burada tekrar etmeye gerek yok #}
+    {# Dashboard özel stilleri doğrudan buraya eklendi, dilerseniz style.css'e taşıyabilirsiniz #}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=1.3"> {# style.css'in en güncel versiyonunu kullandığınızdan emin olun #}
+    <style>
+        /* Sadece bu şablona özel ufak tefek ek stiller buraya gelebilir */
+        .badge {
+            font-size: 0.8em; /* Rozet boyutunu biraz küçült */
+            padding: 0.4em 0.7em;
+            border-radius: 0.5rem;
+        }
+        .badge.bg-success { background-color: var(--success-color) !important; }
+        .badge.bg-warning { background-color: var(--warning-color) !important; }
+        .badge.bg-danger { background-color: var(--danger-color) !important; }
+        .badge.bg-info { background-color: var(--info-color) !important; }
+        .badge.bg-primary { background-color: var(--primary-color) !important; }
+    </style>
+{% endblock extra_head %}
+
+{% block content %}
+<div class="dashboard-container">
+    <div class="row mb-4">
+        <div class="col-12">
+            {% include 'ana_uygulama/includes/messages.html' %}
+        </div>
+    </div>
+
+    <h1 class="mb-4">Kontrol Paneli <small class="text-muted fs-5">| Hoş Geldiniz, {{ request.user.first_name|default:request.user.username }}!</small></h1>
+
+    {# İstatistik Metrik Kartları Bölümü #}
+    <div class="row">
+        {% if request.user.company.company_type == 'NAKLIYECI' %}
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card primary-card">
+                    <i class="fas fa-file-contract card-icon"></i>
+                    <h5 class="card-title">Bekleyen Teklif Talepleri</h5>
+                    <span class="card-value">{{ pending_quote_requests_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:quote_request_list_nakliyeci' %}" class="card-link">
+                        Detayları Gör <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card success-card">
+                    <i class="fas fa-truck-moving card-icon"></i>
+                    <h5 class="card-title">Devam Eden Sevkiyatlar</h5>
+                    <span class="card-value">{{ in_progress_shipments_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}" class="card-link">
+                        Takip Et <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card info-card">
+                    <i class="fas fa-calendar-alt card-icon"></i>
+                    <h5 class="card-title">Bugün Yüklenecek Sevkiyatlar</h5>
+                    <span class="card-value">{{ todays_pickup_shipments_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}" class="card-link">
+                        Listele <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card warning-card">
+                    <i class="fas fa-money-bill-transfer card-icon"></i>
+                    <h5 class="card-title">Ödenmemiş Faturalar (Alacak)</h5>
+                    <span class="card-value">{{ total_unpaid_invoices_shipper|floatformat:2|intcomma }} TL</span>
+                    <a href="{% url 'ana_uygulama:invoice_list_nakliyeci' %}" class="card-link">
+                        Faturaları Yönet <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        {% elif request.user.company.company_type == 'FABRIKA' %}
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card primary-card">
+                    <i class="fas fa-handshake card-icon"></i>
+                    <h5 class="card-title">Bekleyen Teklifleriniz</h5>
+                    <span class="card-value">{{ pending_offers_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:quote_request_list_fabrika' %}" class="card-link">
+                        İncele <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card success-card">
+                    <i class="fas fa-boxes card-icon"></i>
+                    <h5 class="card-title">Aktif Sevkiyatlarınız</h5>
+                    <span class="card-value">{{ active_shipments_factory_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:shipment_list_fabrika' %}" class="card-link">
+                        Takip Et <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card warning-card">
+                    <i class="fas fa-exclamation-triangle card-icon"></i>
+                    <h5 class="card-title">Onay Bekleyen Teklifler</h5>
+                    <span class="card-value">{{ quote_requests_waiting_for_approval_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:quote_request_list_fabrika' %}" class="card-link">
+                        Onayla/Reddet <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card info-card">
+                    <i class="fas fa-file-invoice-dollar card-icon"></i>
+                    <h5 class="card-title">Ödenmesi Gereken Faturalar</h5>
+                    <span class="card-value">{{ total_outgoing_payments_factory|floatformat:2|intcomma }} TL</span>
+                    <a href="{% url 'ana_uygulama:invoice_list_fabrika_view' %}" class="card-link">
+                        Faturaları Görüntüle <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            {# Admin veya Süperkullanıcı için daha genel istatistikler #}
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card primary-card">
+                    <i class="fas fa-building card-icon"></i>
+                    <h5 class="card-title">Toplam Firma Sayısı</h5>
+                    <span class="card-value">{{ total_companies_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:company_list_view' %}" class="card-link">
+                        Tüm Firmalar <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card success-card">
+                    <i class="fas fa-users card-icon"></i>
+                    <h5 class="card-title">Toplam Kullanıcı Sayısı</h5>
+                    <span class="card-value">{{ total_users_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:user_list_view' %}" class="card-link">
+                        Tüm Kullanıcılar <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card info-card">
+                    <i class="fas fa-truck-ramp-box card-icon"></i>
+                    <h5 class="card-title">Toplam Sevkiyat Sayısı</h5>
+                    <span class="card-value">{{ total_shipments_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}" class="card-link">
+                        Tüm Sevkiyatlar <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="metric-card warning-card">
+                    <i class="fas fa-file-invoice card-icon"></i>
+                    <h5 class="card-title">Toplam Fatura Sayısı</h5>
+                    <span class="card-value">{{ total_invoices_count|default:0 }}</span>
+                    <a href="{% url 'ana_uygulama:invoice_list_nakliyeci' %}" class="card-link">
+                        Tüm Faturalar <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    {# Hızlı İşlemler Bölümü #}
+    <div class="row mb-5">
+        <div class="col-12">
+            <h2 class="section-header"><i class="fas fa-rocket"></i>Hızlı İşlemler</h2>
+            <div class="d-flex flex-wrap-md justify-content-start align-items-center">
+                {% if request.user.company.company_type == 'FABRIKA' %}
+                    <a href="{% url 'ana_uygulama:quote_request_create_fabrika' %}" class="quick-action-button btn-success">
+                        <i class="fas fa-plus-circle"></i> Yeni Teklif Talebi Oluştur
+                    </a>
+                    <a href="{% url 'ana_uygulama:shipment_list_fabrika' %}" class="quick-action-button btn-info">
+                        <i class="fas fa-truck-ramp-box"></i> Sevkiyatlarınızı Gör
+                    </a>
+                    <a href="{% url 'ana_uygulama:payment_create_fabrika_view' %}" class="quick-action-button btn-warning">
+                        <i class="fas fa-money-bill-transfer"></i> Yeni Ödeme Kaydı
+                    </a>
+                    <a href="{% url 'ana_uygulama:company_user_create_fabrika_view' %}" class="quick-action-button btn-secondary">
+                        <i class="fas fa-user-plus"></i> Yeni Kullanıcı Ekle
+                    </a>
+                {% elif request.user.company.company_type == 'NAKLIYECI' %}
+                    <a href="{% url 'ana_uygulama:quote_request_list_nakliyeci' %}" class="quick-action-button btn-success">
+                        <i class="fas fa-handshake"></i> Teklif Taleplerini Görüntüle
+                    </a>
+                    <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}" class="quick-action-button btn-info">
+                        <i class="fas fa-truck-moving"></i> Sevkiyatlarınızı Yönetin
+                    </a>
+                    <a href="{% url 'ana_uygulama:carrier_create_nakliyeci_view' %}" class="quick-action-button btn-primary">
+                        <i class="fas fa-user-tie"></i> Yeni Taşıyıcı Ekle
+                    </a>
+                    <a href="{% url 'ana_uygulama:vehicle_create_nakliyeci_view' %}" class="quick-action-button btn-warning">
+                        <i class="fas fa-truck"></i> Yeni Araç Ekle
+                    </a>
+                    <a href="{% url 'ana_uygulama:invoice_create_nakliyeci_view' %}" class="quick-action-button btn-secondary">
+                        <i class="fas fa-file-invoice"></i> Yeni Fatura Oluştur
+                    </a>
+                {% else %}
+                    {# Admin veya Süperkullanıcı için hızlı işlemler #}
+                    <a href="{% url 'ana_uygulama:company_create_view' %}" class="quick-action-button btn-success">
+                        <i class="fas fa-building-circle-plus"></i> Yeni Firma Oluştur
+                    </a>
+                    <a href="{% url 'ana_uygulama:user_create_view' %}" class="quick-action-button btn-info">
+                        <i class="fas fa-user-plus"></i> Yeni Kullanıcı Oluştur
+                    </a>
+                    <a href="{% url 'ana_uygulama:company_list_view' %}" class="quick-action-button btn-primary">
+                        <i class="fas fa-list-alt"></i> Tüm Firmaları Gör
+                    </a>
+                    <a href="{% url 'admin:index' %}" class="quick-action-button btn-warning">
+                        <i class="fas fa-screwdriver-wrench"></i> Admin Paneli
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# Grafik Bölümü #}
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="chart-section">
+                <h5 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Aylık Sevkiyat Hacmi (Son 6 Ay)</h5>
+                <div class="chart-container">
+                    <canvas id="monthlyShipmentVolumeChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-4">
+            <div class="chart-section">
+                <h5 class="mb-3"><i class="fas fa-chart-pie me-2"></i>Ödeme Durumu Dağılımı</h5>
+                <div class="chart-container">
+                    <canvas id="paymentStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Son Hareketler ve Genel Bakış Bölümü #}
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="activity-table-card">
+                <h5><i class="fas fa-history me-2"></i>Son Hareketler</h5>
+                <ul class="list-group list-group-flush">
+                    {% if latest_activities %}
+                        {% for activity in latest_activities %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ activity.type }}:</strong> {{ activity.description }}
+                                <br><small class="text-muted">{{ activity.date|date:"d M Y H:i" }}</small>
+                            </div>
+                            <a href="{{ activity.url }}" class="btn btn-sm btn-outline-primary">Detay</a>
+                        </li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="list-group-item text-muted">Henüz bir hareket bulunmamaktadır.</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+        <div class="col-lg-6 mb-4">
+            <div class="activity-table-card">
+                <h5><i class="fas fa-info-circle me-2"></i>Genel Bilgiler</h5>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Bu Yıl Toplam Fatura Tutarı:
+                        <span class="badge bg-primary rounded-pill">{{ total_invoices_current_year|floatformat:2|intcomma }} TL</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Bu Yıl Toplam Ödeme Tutarı:
+                        <span class="badge bg-success rounded-pill">{{ total_payments_current_year|floatformat:2|intcomma }} TL</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Aktif Araç Sayısı:
+                        <span class="badge bg-info rounded-pill">{{ active_vehicles_count|default:0 }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Ortalama Sevkiyat Süresi:
+                        <span class="badge bg-secondary rounded-pill">{% if average_shipment_duration %}{{ average_shipment_duration }} gün{% else %}N/A{% endif %}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Aylık Sevkiyat Hacmi Grafiği
+        const monthlyShipmentVolumeCtx = document.getElementById('monthlyShipmentVolumeChart');
+        if (monthlyShipmentVolumeCtx) {
+            new Chart(monthlyShipmentVolumeCtx, {
+                type: 'bar',
+                data: {
+                    labels: [{% for month in monthly_shipment_volume.labels %}"{{ month }}",{% endfor %}],
+                    datasets: [{
+                        label: 'Sevkiyat Sayısı',
+                        data: [{% for data_point in monthly_shipment_volume.data %}{{ data_point }},{% endfor %}],
+                        backgroundColor: 'rgba(0, 86, 179, 0.7)', /* primary-color */
+                        borderColor: 'rgba(0, 86, 179, 1)',
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            title: {
+                                display: true,
+                                text: 'Ay',
+                                color: 'var(--muted-text)'
+                            },
+                            ticks: {
+                                color: 'var(--muted-text)'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Sevkiyat Sayısı',
+                                color: 'var(--muted-text)'
+                            },
+                            ticks: {
+                                precision: 0,
+                                color: 'var(--muted-text)'
+                            },
+                            grid: {
+                                color: 'var(--border-light)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Ödeme Durumu Dağılımı Grafiği
+        const paymentStatusCtx = document.getElementById('paymentStatusChart');
+        if (paymentStatusCtx) {
+            new Chart(paymentStatusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: [{% for status in payment_status_distribution.labels %}"{{ status }}",{% endfor %}],
+                    datasets: [{
+                        data: [{% for data_point in payment_status_distribution.data %}{{ data_point }},{% endfor %}],
+                        backgroundColor: [
+                            'rgba(40, 167, 69, 0.7)',  /* Success */
+                            'rgba(255, 193, 7, 0.7)',   /* Warning */
+                            'rgba(220, 53, 69, 0.7)',   /* Danger */
+                            'rgba(23, 162, 184, 0.7)'   /* Info */
+                        ],
+                        borderColor: 'white', /* Dilimler arası beyaz kenarlık */
+                        borderWidth: 2,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 20,
+                                padding: 15,
+                                color: 'var(--muted-text)'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = (total > 0 ? (value / total * 100).toFixed(2) : 0);
+                                    return label + ': ' + value + ' (' + percentage + '%)';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+</script>
+{% endblock extra_scripts %}

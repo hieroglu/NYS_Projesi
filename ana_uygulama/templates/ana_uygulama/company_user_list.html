@@ -1,0 +1,46 @@
+<!-- ana_uygulama/templates/ana_uygulama/company_user_list.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ company_type_display }} Kullanıcıları{% endblock %}
+
+{% block content %}
+    <h1>{{ request.user.company.name }} - {{ company_type_display }} Kullanıcıları</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <p><a href="{% if user.company.company_type == 'NAKLIYECI' %}{% url 'ana_uygulama:company_user_create_nakliyeci' %}{% elif user.company.company_type == 'FABRIKA' %}{% url 'ana_uygulama:company_user_create_fabrika' %}{% endif %}" class="btn">Yeni Kullanıcı Ekle</a></p>
+
+    {% if users %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Kullanıcı Adı</th>
+                    <th>İsim Soyisim</th>
+                    <th>E-posta</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.get_full_name|default:"Belirtilmemiş" }}</td>
+                    <td>{{ u.email|default:"-" }}</td>
+                    <td>{% if u.is_active %}Aktif{% else %}Pasif{% endif %}</td>
+                    <td>
+                        <a href="#">Düzenle</a> | <a href="#">Şifre Değiştir</a>
+                        <!-- İleride kullanıcı düzenleme/silme işlemleri eklenecek -->
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Henüz bu firmaya kayıtlı kullanıcı bulunmamaktadır.</p>
+    {% endif %}
+{% endblock %}

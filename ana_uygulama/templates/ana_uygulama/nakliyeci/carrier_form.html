@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if carrier %}Taşıyıcıyı Düzenle: {{ carrier.full_name }}{% else %}Yeni Taşıyıcı Ekle{% endif %}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {% if message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}<i class="fas fa-check-circle me-2"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}<i class="fas fa-times-circle me-2"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}<i class="fas fa-exclamation-triangle me-2"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.INFO %}<i class="fas fa-info-circle me-2"></i>
+                {% endif %}
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" novalidate>
+                {% csrf_token %}
+
+                {# ------------------- GENEL BİLGİLER BÖLÜMÜ ------------------- #}
+                <h4 class="mb-3 mt-2">Genel Bilgiler</h4>
+                <hr class="mb-3">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.full_name.id_for_label }}" class="form-label">{{ form.full_name.label }} {% if form.full_name.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.full_name }}
+                        {% for error in form.full_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.phone.id_for_label }}" class="form-label">{{ form.phone.label }} {% if form.phone.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.phone }}
+                        {% for error in form.phone.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.email.id_for_label }}" class="form-label">{{ form.email.label }} {% if form.email.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.email }}
+                        {% for error in form.email.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.address.id_for_label }}" class="form-label">{{ form.address.label }} {% if form.address.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.address }}
+                        {% for error in form.address.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                {% if form.is_active %} {# Formda is_active alanı varsa göster #}
+                <div class="form-check mb-3 mt-2">
+                    {{ form.is_active }}
+                    <label for="{{ form.is_active.id_for_label }}" class="form-check-label">{{ form.is_active.label }}</label>
+                    {% for error in form.is_active.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+
+                {# ------------------- VERGİ BİLGİLERİ BÖLÜMÜ ------------------- #}
+                <h4 class="mb-3 mt-4">Vergi Bilgileri</h4>
+                <hr class="mb-3">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="{{ form.account_type.id_for_label }}" class="form-label">{{ form.account_type.label }}</label>
+                        {{ form.account_type }}
+                        {% for error in form.account_type.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="{{ form.tax_office.id_for_label }}" class="form-label">{{ form.tax_office.label }}</label>
+                        {{ form.tax_office }}
+                        {% for error in form.tax_office.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="{{ form.tax_id_number.id_for_label }}" class="form-label">{{ form.tax_id_number.label }} {% if form.tax_id_number.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.tax_id_number }}
+                        {% for error in form.tax_id_number.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                {% if form.tax_plate_document %} {# Formda tax_plate_document alanı varsa göster #}
+                    <div class="mb-3">
+                        <label for="{{ form.tax_plate_document.id_for_label }}" class="form-label">{{ form.tax_plate_document.label }}</label>
+                        {{ form.tax_plate_document }}
+                        {% if carrier.tax_plate_document %} {# Düzenleme modunda ve dosya varsa göster #}
+                            <small class="form-text text-muted mt-1 d-block">Mevcut: 
+                                <a href="{{ carrier.tax_plate_document.url }}" target="_blank">
+                                    <i class="fas fa-file-alt"></i> {{ carrier.tax_plate_document.name|cut:"carrier_documents/tax_plates/" }}
+                                </a>
+                            </small>
+                        {% endif %}
+                        {% for error in form.tax_plate_document.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                {% endif %}
+
+                {# ------------------- BANKA HESAPLARI BÖLÜMÜ (Sadece Düzenleme Modunda) ------------------- #}
+                {% if carrier %} {# 'carrier' nesnesi context ile geliyorsa (yani düzenleme modundaysak) #}
+                <h4 class="mb-3 mt-4">Banka Hesapları</h4>
+                <hr class="mb-3">
+                <div id="bank-accounts-list" class="mb-3">
+                    {% for bank_account in carrier.bank_accounts.all %}
+                        <div class="card mb-2">
+                            <div class="card-body p-2"> {# Daha az padding #}
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <p class="mb-1"><strong>Banka:</strong> {{ bank_account.bank_name }} {% if bank_account.branch_name %}(Şube: {{ bank_account.branch_name }}){% endif %}</p>
+                                        <p class="mb-1"><strong>IBAN:</strong> {{ bank_account.iban }}</p>
+                                        <p class="mb-0"><strong>Hesap Sahibi:</strong> {{ bank_account.account_holder_name }}</p>
+                                        {% if bank_account.is_primary %}<span class="badge bg-success mt-1">Birincil Hesap</span>{% endif %}
+                                    </div>
+                                    <div class="align-self-center">
+                                        <a href="{% url 'ana_uygulama:carrier_bank_account_edit' carrier_id=carrier.id pk=bank_account.pk %}" class="btn btn-sm btn-outline-info me-1" title="Düzenle"><i class="fas fa-edit"></i></a>
+                                        <a href="{% url 'ana_uygulama:carrier_bank_account_delete' carrier_id=carrier.id pk=bank_account.pk %}" class="btn btn-sm btn-outline-danger" title="Sil" onclick="return confirm('Bu banka hesabını silmek istediğinizden emin misiniz?');"><i class="fas fa-trash"></i></a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <p class="text-muted">Bu taşıyıcı için kayıtlı banka hesabı bulunmamaktadır.</p>
+                    {% endfor %}
+                </div>
+                <a href="{% url 'ana_uygulama:carrier_bank_account_add' carrier_id=carrier.id %}" class="btn btn-success"><i class="fas fa-plus"></i> Yeni Banka Hesabı Ekle</a>
+                {% endif %}
+
+                {# ------------------- KAYDET / İPTAL BUTONLARI ------------------- #}
+                <div class="mt-4 pt-3 border-top">
+                    <button type="submit" class="btn btn-primary"> {# Buton rengini primary yaptım, isterseniz değiştirebilirsiniz #}
+                        <i class="fas fa-save"></i> {% if carrier %}Değişiklikleri Kaydet{% else %}Taşıyıcıyı Kaydet{% endif %}
+                    </button>
+                    <a href="{% if carrier %}{% url 'ana_uygulama:carrier_detail_nakliyeci' pk=carrier.id %}{% else %}{% url 'ana_uygulama:carrier_list_nakliyeci' %}{% endif %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+    {# Bu basit gruplama için özel bir JavaScript'e gerek yok. #}
+    {# Eğer ileride banka hesabı ekleme/düzenlemeyi modal içinde AJAX ile yapacaksanız, #}
+    {# ilgili JS kodları buraya veya base.html'e eklenebilir. #}
+{% endblock %}

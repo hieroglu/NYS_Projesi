@@ -1,0 +1,105 @@
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/vehicle_list.html #}
+{% extends "base.html" %}
+{% load static %}
+{% load l10n %} {# Yerelleştirme etiketlerini yüklemek için #}
+
+{% block page_title %}Araçlarım - {{ request.user.company.name|default:"Firma Yok" }}{% endblock page_title %}
+
+{% block content %}
+    {# Mesajları göstermek için include #}
+    {% if messages %}
+        <div class="messages mb-3">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {% if message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}<i class="fas fa-check-circle"></i>
+                    {% elif message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}<i class="fas fa-times-circle"></i>
+                    {% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}<i class="fas fa-exclamation-triangle"></i>
+                    {% elif message.level == DEFAULT_MESSAGE_LEVELS.INFO %}<i class="fas fa-info-circle"></i>
+                    {% endif %}
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="btn-group">
+            <h3 class="mb-0">Araçlarım</h3> {# Başlık buraya taşındı #}
+            <a href="{% url 'ana_uygulama:vehicle_create_nakliyeci' %}" class="btn btn-primary ms-3"><i class="fas fa-plus"></i> Yeni Araç Ekle</a>
+            {# Filtreleme vb. butonlar buraya eklenebilir #}
+        </div>
+        <span class="text-muted">Toplam {{ vehicles.count }} araç</span>
+    </div>
+
+    {% if vehicles %}
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead>
+                    <tr>
+                        <th>Plaka</th>
+                        <th>Şoför Adı</th>
+                        <th>Şoför Telefon</th>
+                        <th>Muayene Bitiş</th>
+                        <th>Sigorta Bitiş</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vehicle in vehicles %}
+                    <tr class="{% if vehicle.is_inspection_expired or vehicle.is_insurance_expired %}table-danger{% elif vehicle.inspection_expiry_date and vehicle.inspection_expiry_date < thirty_days_later or vehicle.insurance_expiry_date and vehicle.insurance_expiry_date < thirty_days_later %}table-warning{% endif %}">
+                        <td><strong>{{ vehicle.plate_number }}</strong></td>
+                        <td>{{ vehicle.driver_name }}</td>
+                        <td>{{ vehicle.driver_phone_number|default:"-" }}</td>
+                        <td>
+                            {% if vehicle.inspection_expiry_date %}
+                                {{ vehicle.inspection_expiry_date|date:"d F Y" }}
+                                {% if vehicle.is_inspection_expired %}
+                                    <span class="badge bg-danger ms-1">Geçmiş</span>
+                                {% elif vehicle.inspection_expiry_date < thirty_days_later %}
+                                    <span class="badge bg-warning text-dark ms-1">Yaklaşıyor</span>
+                                {% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {% if vehicle.insurance_expiry_date %}
+                                {{ vehicle.insurance_expiry_date|date:"d F Y" }}
+                                {% if vehicle.is_insurance_expired %}
+                                    <span class="badge bg-danger ms-1">Geçmiş</span>
+                                {% elif vehicle.insurance_expiry_date < thirty_days_later %}
+                                    <span class="badge bg-warning text-dark ms-1">Yaklaşıyor</span>
+                                {% endif %}
+                            {% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {# Detay ve Düzenle butonu - pk yerine vehicle_id kullanıldı #}
+                            <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=vehicle.pk %}" class="btn btn-sm btn-info me-1" title="Detay/Düzenle">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="{% url 'ana_uygulama:vehicle_update_nakliyeci' vehicle_id=vehicle.pk %}" class="btn btn-sm btn-warning me-1" title="Düzenle">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            {# Sil butonu - pk yerine vehicle_id kullanıldı #}
+                            <a href="{% url 'ana_uygulama:vehicle_delete_nakliyeci' vehicle_id=vehicle.pk %}" class="btn btn-sm btn-danger" title="Sil"
+                               onclick="return confirm('Bu aracı silmek istediğinizden emin misiniz?');">
+                                <i class="fas fa-trash-alt"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i> Henüz sisteme kayıtlı aracınız bulunmamaktadır. <a href="{% url 'ana_uygulama:vehicle_create_nakliyeci' %}" class="alert-link">Hemen yeni bir araç ekleyin.</a>
+        </div>
+    {% endif %}
+{% endblock content %}
+
+{% block extra_scripts %}
+<script>
+// Tablo satırlarına tıklama vb. için JS eklenebilir.
+// Örneğin, "sil" butonu için daha gelişmiş bir onay modalı burada tanımlanabilir.
+</script>
+{% endblock extra_scripts %}

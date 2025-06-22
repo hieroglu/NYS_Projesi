@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+    {% if query %}
+        {# Sonuçların olup olmadığını kontrol eden genel bir if bloğu #}
+        {% if results_shipments or results_vehicles or results_carriers or results_companies_factory or results_companies_shipper or results_invoices or results_quote_requests %}
+            <p class="text-muted mb-4">"{{ query }}" için bulunan toplam sonuçlar aşağıdadır.</p>
+
+            {% if results_shipments %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-shipping-fast card-icon"></i>
+                        <h3 class="card-title">Bulunan İşler/Sevkiyatlar ({{ results_shipments.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_shipments %}
+                                <li class="list-group-item">
+                                    <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci' shipment_id=item.id %}">İş #{{ item.id }}</a>: {{ item.origin }} <i class="fas fa-arrow-right fa-xs"></i> {{ item.destination }} (Fabrika: {{ item.factory.name }})
+                                    <span class="badge bg-info float-end">{{ item.get_status_display }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if results_vehicles %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-truck card-icon"></i>
+                        <h3 class="card-title">Bulunan Araçlar ({{ results_vehicles.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_vehicles %}
+                                <li class="list-group-item">
+                                    <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=item.id %}">Plaka: {{ item.plate_number }}</a> (Şoför: {{ item.driver_name }}, Sahip: {{ item.carrier.full_name|default:"N/A" }})
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            
+            {% if results_carriers %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-user-tie card-icon"></i>
+                        <h3 class="card-title">Bulunan Taşıyıcılar ({{ results_carriers.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_carriers %}
+                                <li class="list-group-item">
+                                    <a href="{% url 'ana_uygulama:carrier_detail_nakliyeci' pk=item.id %}">{{ item.full_name }}</a> (Tel: {{ item.phone|default:"-" }})
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if results_companies_factory %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-industry card-icon"></i>
+                        <h3 class="card-title">Bulunan Fabrikalar ({{ results_companies_factory.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_companies_factory %}
+                                <li class="list-group-item">
+                                    {{ item.name }} (Email: {{ item.email|default:"-" }})
+                                    {# <a href="#">Detay</a> Fabrika detay sayfası için link eklenebilir #}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+            
+            {% if results_companies_shipper %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-truck-moving card-icon"></i>
+                        <h3 class="card-title">Bulunan Nakliyeciler ({{ results_companies_shipper.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_companies_shipper %}
+                                <li class="list-group-item">
+                                    {{ item.name }} (Email: {{ item.email|default:"-" }})
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if results_invoices %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-file-invoice-dollar card-icon"></i>
+                        <h3 class="card-title">Bulunan Faturalar ({{ results_invoices.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_invoices %}
+                                <li class="list-group-item">
+                                    <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci' invoice_id=item.id %}">Fatura No: {{ item.invoice_number }}</a> (Müşteri: {{ item.billed_to_factory.name }}, Tutar: {{ item.total_amount|intcomma }} TL)
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if results_quote_requests %}
+                <div class="dashboard-card mb-4">
+                    <div class="dashboard-card-header">
+                        <i class="fas fa-tasks card-icon"></i>
+                        <h3 class="card-title">Bulunan Teklif Talepleri ({{ results_quote_requests.count }})</h3>
+                    </div>
+                    <div class="dashboard-card-content">
+                        <ul class="list-group list-group-flush">
+                            {% for item in results_quote_requests %}
+                                <li class="list-group-item">
+                                    <a href="{% if request.user.company.company_type == 'NAKLIYECI' %}{% url 'ana_uygulama:quote_request_detail_nakliyeci' quote_id=item.id %}{% else %}{% url 'ana_uygulama:quote_request_detail_fabrika' quote_id=item.id %}{% endif %}">Talep #{{ item.id }}</a>: {{ item.origin }} <i class="fas fa-arrow-right fa-xs"></i> {{ item.destination }} (Fabrika: {{ item.factory.name }})
+                                    <span class="badge bg-secondary float-end">{{ item.get_status_display }}</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
+
+        {# ---- YUKARIDAKİ İÇ IF BLOĞUNU BURADA KAPATIN ---- #}
+        {% else %} 
+            {# Bu else, "{% if results_shipments or results_vehicles ... %}" bloğuna aittir #}
+            {# Eğer query varsa ama hiçbir sonuç kategorisinde sonuç yoksa bu mesaj gösterilir #}
+            <div class="alert alert-warning">"{{ query }}" için sonuç bulunamadı. Lütfen farklı bir arama terimi deneyin.</div>
+        {% endif %}
+    {# ---- ANA IF BLOĞUNU BURADA KAPATIN ---- #}
+    {% else %} 
+        {# Bu else, "{% if query %}" bloğuna aittir #}
+        {# Eğer query yoksa (yani arama yapılmamışsa) bu mesaj gösterilir #}
+        <div class="alert alert-info">Lütfen arama yapmak için bir terim girin.</div>
+    {% endif %}
+{% endblock %}

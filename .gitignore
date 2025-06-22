@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.egg-info/
+.Python
+.env  # Sanal ortam dosyaları (venv veya conda gibi)
+venv/ # Sanal ortam klasörü
+env/  # Diğer sanal ortam klasörleri
+
+# Django
+db.sqlite3 # Varsayılan SQLite veritabanı
+/media/    # Yüklenen medya dosyaları
+/static_cdn/ # Eğer collectstatic için farklı bir çıktı klasörü kullanıyorsanız
+*.log      # Log dosyaları
+local_settings.py # Eğer hassas bilgileri içeren ayrı bir ayarlar dosyası kullanıyorsanız
+
+# Editor directories and files
+.idea/     # PyCharm/IntelliJ IDEA
+.vscode/   # VS Code ayarları
+*.swp
+*.swo
+*~
+.DS_Store  # macOS specific
+Thumbs.db  # Windows specific

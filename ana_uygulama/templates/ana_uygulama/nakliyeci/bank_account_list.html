@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4">Banka Hesapları</h2>
+    {% if bank_accounts %}
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Banka Adı</th>
+                    <th>Şube</th>
+                    <th>IBAN</th>
+                    <th>Hesap Sahibi</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for account in bank_accounts %}
+                <tr>
+                    <td>{{ account.bank_name }}</td>
+                    <td>{{ account.branch_name }}</td>
+                    <td>{{ account.iban }}</td>
+                    <td>{{ account.account_holder_name }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-info">Kayıtlı banka hesabı bulunmamaktadır.</div>
+    {% endif %}
+</div>
+{% endblock %}

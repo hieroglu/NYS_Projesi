@@ -1,0 +1,127 @@
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/shipment_list.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">{{ page_title }}</h3>
+    <a href="{% url 'ana_uygulama:shipment_create_nakliyeci' %}" class="btn btn-primary">Yeni İş Girişi</a>
+</div>
+
+{% include 'ana_uygulama/includes/messages.html' %}
+
+{# Filtreleme Butonları #}
+<div class="mb-3 d-flex flex-wrap align-items-center">
+    <strong class="me-2">Filtrele:</strong>
+    <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}"
+       class="btn {% if not current_status_filter %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm me-2 mb-1">
+        Tümü
+    </a>
+    {% for status_code, status_display in status_choices %}
+        <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}?status={{ status_code }}"
+           class="btn {% if current_status_filter == status_code %}btn-primary{% else %}btn-outline-primary{% endif %} btn-sm me-2 mb-1">
+            {{ status_display }}
+        </a>
+    {% endfor %}
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>FABRİKA</th>
+                        <th>YÜKLEME / TESLİMAT</th>
+                        <th>YÜKLEME TARİHİ</th>
+                        <th>ATANAN ARAÇ</th>
+                        <th>DURUM</th>
+                        <th>FİYAT</th>
+                        <th>İŞLEM</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shipment in shipments %}
+                    <tr>
+                        <td>{{ shipment.pk }}</td>
+                        <td>{{ shipment.factory.name }}</td>
+                        <td>{{ shipment.origin }} <i class="fas fa-arrow-right mx-1"></i> {{ shipment.destination }}</td>
+                        <td>{{ shipment.pickup_date|date:"d.m.Y" }}</td>
+                        <td>
+                            {% if shipment.assigned_vehicle %}
+                                {{ shipment.assigned_vehicle.plate_number }}
+                                {% if shipment.assigned_vehicle.inspection_expiry_date and shipment.assigned_vehicle.inspection_expiry_date < today %}
+                                    <span class="badge bg-danger ms-1" data-bs-toggle="tooltip" title="Muayene Süresi Doldu"><i class="fas fa-exclamation-triangle"></i></span>
+                                {% elif shipment.assigned_vehicle.inspection_expiry_date and shipment.assigned_vehicle.inspection_expiry_date <= thirty_days_later %}
+                                    <span class="badge bg-warning ms-1" data-bs-toggle="tooltip" title="Muayene Süresi Yaklaşıyor"><i class="fas fa-exclamation-circle"></i></span>
+                                {% endif %}
+                                {% if shipment.assigned_vehicle.insurance_expiry_date and shipment.assigned_vehicle.insurance_expiry_date < today %}
+                                    <span class="badge bg-danger ms-1" data-bs-toggle="tooltip" title="Sigorta Süresi Doldu"><i class="fas fa-shield-alt"></i></span>
+                                {% elif shipment.assigned_vehicle.insurance_expiry_date and shipment.assigned_vehicle.insurance_expiry_date <= thirty_days_later %}
+                                    <span class="badge bg-warning ms-1" data-bs-toggle="tooltip" title="Sigorta Süresi Yaklaşıyor"><i class="fas fa-shield-alt"></i></span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">Atanmadı</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if shipment.status == 'PENDING_ASSIGNMENT' %}
+                                <span class="badge bg-info">{{ shipment.get_status_display }}</span>
+                            {% elif shipment.status == 'ASSIGNED' %}
+                                <span class="badge bg-primary">{{ shipment.get_status_display }}</span>
+                            {% elif shipment.status == 'IN_TRANSIT' %}
+                                <span class="badge bg-warning">{{ shipment.get_status_display }}</span>
+                            {% elif shipment.status == 'DELIVERED' %}
+                                <span class="badge bg-success">{{ shipment.get_status_display }}</span>
+                            {% elif shipment.status == 'BILLED' %}
+                                <span class="badge bg-secondary">{{ shipment.get_status_display }}</span>
+                            {% elif shipment.status == 'CANCELLED' %}
+                                <span class="badge bg-danger">{{ shipment.get_status_display }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ shipment.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{% if shipment.price_for_factory %}{{ shipment.price_for_factory|floatformat:2 }} TL{% else %}N/A{% endif %}</td>
+                        <td>
+                            <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci' shipment_id=shipment.id %}" class="btn btn-info btn-sm" data-bs-toggle="tooltip" title="Detaylar"><i class="fas fa-eye"></i></a>
+                            {% if shipment.status != 'BILLED' and shipment.status != 'CANCELLED' %}
+                                <a href="{% url 'ana_uygulama:shipment_update_nakliyeci' shipment_id=shipment.id %}" class="btn btn-info btn-sm me-1" data-bs-toggle="tooltip" title="İşi Düzenle"><i class="fas fa-edit"></i></a>
+                            {% endif %}
+                            {% if shipment.status == 'PENDING_ASSIGNMENT' or shipment.status == 'ASSIGNED' %}
+                                <a href="{% url 'ana_uygulama:assign_vehicle_to_shipment' shipment_id=shipment.id %}" class="btn btn-warning btn-sm me-1" data-bs-toggle="tooltip" title="Araç Ata/Değiştir"><i class="fas fa-truck-pickup"></i></a>
+                            {% endif %}
+                            {% if not shipment.invoice_set.exists and shipment.status == 'DELIVERED' %} {# Sadece tamamlanmış ve faturası olmayan işler için #}
+                                <a href="{% url 'ana_uygulama:invoice_create' shipment_id=shipment.id %}" class="btn btn-success btn-sm me-1" data-bs-toggle="tooltip" title="Fatura Oluştur"><i class="fas fa-file-invoice-dollar"></i></a>
+                            {% endif %}
+                            {# Silme butonu sadece belirli durumlarda gösterilebilir #}
+                            {% comment %}
+                                Django template'lerinde `in` operatörü listelerle doğrudan kullanılmadığında sorun çıkarabilir.
+                                Bu nedenle, buradaki kontrolü daha güvenli bir şekilde `and` operatörleriyle değiştiriyoruz.
+                            {% endcomment %}
+                            {% if shipment.status != 'BILLED' and shipment.status != 'IN_TRANSIT' and shipment.status != 'DELIVERED' and shipment.status != 'COMPLETED' %}
+                                <a href="{% url 'ana_uygulama:shipment_delete_nakliyeci' shipment_id=shipment.id %}" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Sil"><i class="fas fa-trash"></i></a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8">Kayıtlı iş bulunmamaktadır.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script>
+    $(function () {
+        $('[data-bs-toggle="tooltip"]').tooltip();
+    });
+</script>
+{% endblock extra_scripts %}

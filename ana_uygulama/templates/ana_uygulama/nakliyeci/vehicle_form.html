@@ -1,0 +1,178 @@
+<!-- ana_uygulama/templates/ana_uygulama/nakliyeci/vehicle_form.html -->
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if vehicle %}Aracı Düzenle{% else %}Yeni Araç Ekle{% endif %}{% endblock title %}
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+    <div class="card shadow-sm">
+        <div class="card-body">
+            {# Django mesajlarını göstermek için #}
+            {% include 'ana_uygulama/includes/messages.html' %}
+
+            <form method="post" enctype="multipart/form-data" novalidate> {# enctype dosya yüklemeleri için önemli! #}
+                {% csrf_token %}
+
+                {# Formun genel hatalarını göstermek için (non-field errors) #}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        <h4 class="alert-heading">Lütfen aşağıdaki hataları düzeltin:</h4>
+                        <ul class="mb-0">
+                            {% for error in form.non_field_errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                <h5 class="mb-3">Araç ve Sahip Bilgileri</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.carrier.id_for_label }}" class="form-label">{{ form.carrier.label }} {% if form.carrier.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.carrier }} {# Bu alanı Select2 ile aranabilir yapacağız #}
+                        {% for error in form.carrier.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                        {% if form.carrier.help_text %}<small class="form-text text-muted">{{ form.carrier.help_text }}</small>{% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.plate_number.id_for_label }}" class="form-label">{{ form.plate_number.label }} {% if form.plate_number.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                        {{ form.plate_number }}
+                        {% for error in form.plate_number.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.vehicle_type.id_for_label }}" class="form-label">{{ form.vehicle_type.label }}</label>
+                        {{ form.vehicle_type }}
+                        {% for error in form.vehicle_type.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="{{ form.capacity_ton.id_for_label }}" class="form-label">{{ form.capacity_ton.label }}</label>
+                        {{ form.capacity_ton }}
+                        {% for error in form.capacity_ton.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label for="{{ form.capacity_m3.id_for_label }}" class="form-label">{{ form.capacity_m3.label }}</label>
+                        {{ form.capacity_m3 }}
+                        {% for error in form.capacity_m3.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+
+                <h5 class="mb-3 mt-4">Şoför Bilgileri</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.driver_name.id_for_label }}" class="form-label">{{ form.driver_name.label }}</label>
+                        {{ form.driver_name }}
+                        {% for error in form.driver_name.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.driver_phone.id_for_label }}" class="form-label">{{ form.driver_phone.label }}</label>
+                        {{ form.driver_phone }}
+                        {% for error in form.driver_phone.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                {# Eğer driver_license_document alanı varsa göster #}
+                {% if form.driver_license_document %} 
+                <div class="mb-3">
+                    <label for="{{ form.driver_license_document.id_for_label }}" class="form-label">{{ form.driver_license_document.label }}</label>
+                    {{ form.driver_license_document }}
+                    {% if vehicle.driver_license_document %}
+                        <small class="form-text text-muted mt-1 d-block">Mevcut: 
+                            <a href="{{ vehicle.driver_license_document.url }}" target="_blank">
+                                <i class="fas fa-id-card"></i> {{ vehicle.driver_license_document.name|cut:"driver_documents/licenses/" }}
+                            </a>
+                        </small>
+                    {% endif %}
+                    {% for error in form.driver_license_document.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+                {% endif %}
+
+                <h5 class="mb-3 mt-4">Belge ve Muayene Bilgileri</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.license_plate_image.id_for_label }}" class="form-label">{{ form.license_plate_image.label }}</label>
+                        {{ form.license_plate_image }}
+                        {% if vehicle.license_plate_image %}
+                            <small class="form-text text-muted mt-1 d-block">Mevcut: <a href="{{ vehicle.license_plate_image.url }}" target="_blank"><i class="fas fa-id-card"></i> {{ vehicle.license_plate_image.name|cut:"vehicle_documents/plate_images/" }}</a></small>
+                        {% endif %}
+                        {% for error in form.license_plate_image.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.vehicle_license_image.id_for_label }}" class="form-label">{{ form.vehicle_license_image.label }}</label>
+                        {{ form.vehicle_license_image }}
+                        {% if vehicle.vehicle_license_image %}
+                            <small class="form-text text-muted mt-1 d-block">Mevcut: <a href="{{ vehicle.vehicle_license_image.url }}" target="_blank"><i class="fas fa-file-alt"></i> {{ vehicle.vehicle_license_image.name|cut:"vehicle_documents/vehicle_licenses/" }}</a></small>
+                        {% endif %}
+                        {% for error in form.vehicle_license_image.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                 <div class="row">
+                    <div class="col-md-6 mb-3">
+                         <label for="{{ form.insurance_document.id_for_label }}" class="form-label">{{ form.insurance_document.label }}</label>
+                        {{ form.insurance_document }}
+                        {% if vehicle.insurance_document %}
+                            <small class="form-text text-muted mt-1 d-block">Mevcut: <a href="{{ vehicle.insurance_document.url }}" target="_blank"><i class="fas fa-file-shield-alt"></i> {{ vehicle.insurance_document.name|cut:"vehicle_documents/insurances/" }}</a></small>
+                        {% endif %}
+                        {% for error in form.insurance_document.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.inspection_document.id_for_label }}" class="form-label">{{ form.inspection_document.label }}</label>
+                        {{ form.inspection_document }}
+                        {% if vehicle.inspection_document %}
+                            <small class="form-text text-muted mt-1 d-block">Mevcut: <a href="{{ vehicle.inspection_document.url }}" target="_blank"><i class="fas fa-clipboard-check"></i> {{ vehicle.inspection_document.name|cut:"vehicle_documents/inspections/" }}</a></small>
+                        {% endif %}
+                        {% for error in form.inspection_document.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                 <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="{{ form.license_expiry_date.id_for_label }}" class="form-label">{{ form.license_expiry_date.label }}</label>
+                        {{ form.license_expiry_date }}
+                        {% for error in form.license_expiry_date.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="{{ form.insurance_expiry_date.id_for_label }}" class="form-label">{{ form.insurance_expiry_date.label }}</label>
+                        {{ form.insurance_expiry_date }}
+                        {% for error in form.insurance_expiry_date.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="{{ form.inspection_expiry_date.id_for_label }}" class="form-label">{{ form.inspection_expiry_date.label }}</label>
+                        {{ form.inspection_expiry_date }}
+                        {% for error in form.inspection_expiry_date.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-3 border-top">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> {% if vehicle %}Değişiklikleri Kaydet{% else %}Aracı Kaydet{% endif %}
+                    </button>
+                    <a href="{% if vehicle %}{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=vehicle.id %}{% else %}{% url 'ana_uygulama:vehicle_list_nakliyeci' %}{% endif %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Select2'yi 'select2-enable' class'ına sahip tüm select elementlerine uygula
+        // carrier alanı için select2'yi manuel olarak başlatın
+        $('#{{ form.carrier.id_for_label }}').select2({
+            theme: 'bootstrap-5', // Bootstrap 5 teması için (eğer CSS'ini eklediyseniz)
+            placeholder: "Bir taşıyıcı seçin",
+            allowClear: true // Seçimi temizleme butonu ekler (isteğe bağlı)
+        });
+
+        // Diğer Select2 başlatmaları varsa buraya ekleyin
+        // Örneğin:
+        // $('.other-select2-fields').select2({
+        //     theme: 'bootstrap-5',
+        //     placeholder: "Seçim Yapın",
+        //     allowClear: true
+        // });
+    });
+</script>
+{% endblock extra_scripts %}

@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Taşıyıcı Detayı: {{ carrier.full_name }}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h4>Taşıyıcı Detayı: {{ carrier.full_name }}</h4>
+        <div>
+            <a href="{% url 'ana_uygulama:carrier_update_nakliyeci' pk=carrier.id %}" class="btn btn-sm btn-info me-2" title="Düzenle"><i class="fas fa-edit"></i> Düzenle</a>
+            <a href="{% url 'ana_uygulama:carrier_list_nakliyeci' %}" class="btn btn-secondary btn-sm" title="Listeye Dön"><i class="fas fa-arrow-left"></i> Listeye Dön</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h5>İletişim Bilgileri</h5>
+                <p><strong>Telefon:</strong> {{ carrier.phone|default:"Yok" }}</p>
+                <p><strong>E-posta:</strong> {{ carrier.email|default:"Yok" }}</p>
+                <p><strong>Adres:</strong> {{ carrier.address|default:"Yok" }}</p>
+            </div>
+            <div class="col-md-6">
+                <h5>Finansal Bilgiler</h5>
+                <p><strong>Vergi Dairesi:</strong> {{ carrier.tax_office|default:"Yok" }}</p> {# Eğer tax_office alanı varsa #}
+                <p><strong>Vergi/TC No:</strong> {{ carrier.tax_id_number|default:"Yok" }}</p>
+                <p>
+                    <strong>Vergi Levhası:</strong>
+                    {% if carrier.tax_plate_document %}
+                        <a href="{{ carrier.tax_plate_document.url }}" target="_blank">Görüntüle <i class="fas fa-external-link-alt"></i></a>
+                    {% else %}
+                        Yok
+                    {% endif %}
+                </p>
+
+                <h6>Banka Hesapları:</h6>
+                {% if bank_accounts_of_carrier %}
+                    {% for account in bank_accounts_of_carrier %}
+                        <div class="mb-2 p-2 border rounded {% if account.is_primary %}bg-light-blue{% endif %}">
+                            <p class="mb-0"><strong>Banka Adı:</strong> {{ account.bank_name|default:"Yok" }} {% if account.is_primary %}<span class="badge bg-success">Birincil</span>{% endif %}</p>
+                            <p class="mb-0"><strong>Hesap Sahibi:</strong> {{ account.account_owner_name|default:"Yok" }}</p>
+                            <p class="mb-0"><strong>IBAN:</strong> {{ account.iban|default:"Yok"|wordwrap:4 }}</p>
+                            <a href="{% url 'ana_uygulama:carrier_bank_account_edit' carrier_id=carrier.id pk=account.id %}" class="btn btn-sm btn-outline-info mt-1"><i class="fas fa-edit"></i> Düzenle</a>
+                            <a href="{% url 'ana_uygulama:carrier_bank_account_delete' carrier_id=carrier.id pk=account.id %}" class="btn btn-sm btn-outline-danger mt-1" onclick="return confirm('Bu banka hesabını silmek istediğinizden emin misiniz?');"><i class="fas fa-trash"></i> Sil</a>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p>Bu taşıyıcıya ait banka hesabı bulunmamaktadır.</p>
+                {% endif %}
+                <a href="{% url 'ana_uygulama:carrier_bank_account_add' carrier_id=carrier.id %}" class="btn btn-sm btn-primary mt-3"><i class="fas fa-plus"></i> Banka Hesabı Ekle</a>
+            </div>
+        </div>
+
+        <hr>
+
+        <h5>Bu Taşıyıcıya Ait Araçlar ({{ vehicles_of_carrier.count }})</h5>
+        {% if vehicles_of_carrier %}
+            <ul class="list-group">
+                {% for vehicle in vehicles_of_carrier %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=vehicle.id %}">
+                            <strong>{{ vehicle.plate_number }}</strong> - Sürücü: {{ vehicle.driver_name|default:"Belirtilmemiş" }} ({{ vehicle.get_vehicle_type_display }})
+                        </a>
+                        <div>
+                            {% comment %}
+                                Muayene ve Sigorta Süresi Yakın/Geçti Kontrolleri
+                                Not: 'today' ve 'seven_days_later' değişkenleri views.py'den gönderilmelidir.
+                            {% endcomment %}
+                            {% if vehicle.is_inspection_expired %}
+                                <span class="badge bg-danger me-1" title="Muayene Süresi Geçti">Muayene Bitti <i class="fas fa-exclamation-triangle"></i></span>
+                            {% elif vehicle.inspection_expiry_date and vehicle.inspection_expiry_date <= seven_days_later %}
+                                <span class="badge bg-warning me-1" title="Muayene Süresi Yaklaşıyor">Muayene Yakın <i class="fas fa-exclamation-triangle"></i></span>
+                            {% endif %}
+                            {% if vehicle.is_insurance_expired %}
+                                <span class="badge bg-danger" title="Sigorta Süresi Geçti">Sigorta Bitti <i class="fas fa-exclamation-triangle"></i></span>
+                            {% elif vehicle.insurance_expiry_date and vehicle.insurance_expiry_date <= seven_days_later %}
+                                <span class="badge bg-warning" title="Sigorta Süresi Yaklaşıyor">Sigorta Yakın <i class="fas fa-exclamation-triangle"></i></span>
+                            {% endif %}
+                            <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=vehicle.id %}" class="btn btn-sm btn-outline-primary ms-2"><i class="fas fa-eye"></i> Detaylar</a>
+                        </div>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Bu taşıyıcıya ait kayıtlı araç bulunmamaktadır.</p>
+        {% endif %}
+        <a href="{% url 'ana_uygulama:vehicle_create_nakliyeci_for_carrier' carrier.id %}" class="btn btn-sm btn-success mt-3"><i class="fas fa-plus"></i> Bu Taşıyıcıya Araç Ekle</a>
+    </div>
+</div>
+{% endblock %}

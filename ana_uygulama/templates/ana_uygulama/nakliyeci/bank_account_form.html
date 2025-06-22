@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if bank_account %}Banka Hesabını Düzenle{% else %}Yeni Banka Hesabı Ekle{% endif %}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+    <p><strong>Taşıyıcı:</strong> {{ carrier.full_name }}</p>
+    <hr>
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {{ form.as_p }}
+        <div class="mt-3">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> {% if bank_account %}Güncelle{% else %}Ekle{% endif %}
+            </button>
+            <a href="{% url 'ana_uygulama:carrier_update_nakliyeci' pk=carrier.id %}" class="btn btn-secondary ms-2">Taşıyıcı Düzenlemeye Dön</a>
+        </div>
+    </form>
+{% endblock %}

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Fiyat Teklifi Talepleri{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtrele ve Ara</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end" style="
+    align-items: center;
+    justify-self: center;
+">
+                <div class="col-md-3">
+                    <label for="factory_search" class="form-label form-label-sm">Fabrika Adı</label>
+                    <input type="text" name="factory_search" id="factory_search" class="form-control form-control-sm" value="{{ current_factory_search }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="status_filter" class="form-label form-label-sm">Durum</label>
+                    <select name="status" id="status_filter" class="form-select form-select-sm">
+                        <option value="">Tümü</option>
+                        {% for val, disp in status_choices %}
+                            <option value="{{ val }}" {% if val == current_status_filter %}selected{% endif %}>{{ disp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label form-label-sm">Talep Tarihi Başlangıç</label>
+                    <input type="date" name="date_from" id="date_from" class="form-control form-control-sm" value="{{ current_date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label form-label-sm">Talep Tarihi Bitiş</label>
+                    <input type="date" name="date_to" id="date_to" class="form-control form-control-sm" value="{{ current_date_to }}">
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-primary btn-sm w-100" style="margin-left: 30px;/* margin-right: 10px; */margin-top: 32px;/* margin-bottom: 10px; */"><i class="fas fa-search"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Teklif Talepleri Listesi</h5>
+            <span class="text-muted small">Toplam {{ quote_requests.count }} talep bulundu</span>
+        </div>
+        <div class="card-body p-0"> {# Tablo için padding'i kaldıralım #}
+            {% if quote_requests %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped dashboard-table mb-0"> {# mb-0 kart içinde son eleman olunca #}
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Fabrika</th>
+                                <th>Çıkış <i class="fas fa-long-arrow-alt-right fa-xs"></i> Varış</th>
+                                <th>Talep Tarihi</th>
+                                <th>Durum</th>
+                                <th>Verilen Fiyat</th>
+                                <th class="text-center">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for quote in quote_requests %}
+                            <tr>
+                                <td>{{ quote.id }}</td>
+                                <td>{{ quote.factory.name|truncatechars:20 }}</td>
+                                <td title="{{quote.origin}} - {{quote.destination}}">{{ quote.origin|truncatechars:15 }} <i class="fas fa-long-arrow-alt-right fa-xs"></i> {{ quote.destination|truncatechars:15 }}</td>
+                                <td>{{ quote.requested_pickup_date|date:"d M Y" }}</td>
+                                <td>
+                                    <span class="badge 
+                                        {% if quote.status == 'PENDING' %}bg-warning text-dark
+                                        {% elif quote.status == 'QUOTED' %}bg-info
+                                        {% elif quote.status == 'ACCEPTED' %}bg-success
+                                        {% elif quote.status == 'REJECTED' %}bg-danger
+                                        {% elif quote.status == 'COMPLETED' %}bg-secondary
+                                        {% else %}bg-light text-dark{% endif %}">
+                                        {{ quote.get_status_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if quote.offered_price %}
+                                        {{ quote.offered_price|intcomma }} TL
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if quote.status == 'PENDING' %}
+                                        <a href="{% url 'ana_uygulama:quote_request_offer_price_nakliyeci' pk=quote.id %}" class="btn btn-sm btn-primary" title="Fiyat Ver">
+                                            <i class="fas fa-tags"></i> Fiyat Ver
+                                        </a>
+                                    {% elif quote.status == 'QUOTED' and quote.priced_by_shipper_company == request.user.company %}
+                                        <a href="{% url 'ana_uygulama:quote_request_offer_price_nakliyeci' pk=quote.id %}" class="btn btn-sm btn-warning me-1" title="Fiyatı Güncelle">
+                                            <i class="fas fa-edit"></i> Güncelle
+                                        </a>
+                                        <a href="{% url 'ana_uygulama:quote_request_detail_nakliyeci' pk=quote.id %}" class="btn btn-sm btn-outline-secondary" title="Detayları Gör">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    {% elif quote.status == 'ACCEPTED' and quote.priced_by_shipper_company == request.user.company %}
+                                         <a href="{% url 'ana_uygulama:shipment_create_from_quote_nakliyeci' pk=quote.id %}" class="btn btn-sm btn-success me-1" title="İşe Dönüştür">
+                                            <i class="fas fa-check-circle"></i> İşe Dönüştür
+                                        </a>
+                                        <a href="{% url 'ana_uygulama:quote_request_detail_nakliyeci' pk=quote.id %}" class="btn btn-sm btn-outline-secondary" title="Detayları Gör">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    {% else %} {# REJECTED, COMPLETED veya başkasının QUOTED'ı #}
+                                        <a href="{% url 'ana_uygulama:quote_request_detail_nakliyeci' pk=quote.id %}" class="btn btn-sm btn-outline-secondary" title="Detayları Gör">
+                                            <i class="fas fa-eye"></i> Detay
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="card-body">
+                    <p class="text-muted mb-0">Filtrelerinize uygun bekleyen veya işlem yaptığınız teklif talebi bulunmamaktadır.</p>
+                </div>
+            {% endif %}
+        </div>
+        {# TODO: Sayfalama eklenebilir #}
+{% endblock %}

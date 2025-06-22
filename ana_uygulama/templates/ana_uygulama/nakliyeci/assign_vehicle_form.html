@@ -1,0 +1,75 @@
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/assign_vehicle_form.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-header">
+        <h4 class="mb-0">{{ page_title }}</h4>
+    </div>
+    <div class="card-body">
+        {% include 'ana_uygulama/includes/messages.html' %}
+
+        <h5 class="mb-3">İş Detayları (ID: {{ shipment.pk }})</h5>
+        <div class="row mb-3">
+            <div class="col-md-6"><strong>Müşteri Fabrika:</strong> {{ shipment.factory.name }}</div>
+            <div class="col-md-6"><strong>Yükleme Yeri:</strong> {{ shipment.origin }}</div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6"><strong>Teslimat Yeri:</strong> {{ shipment.destination }}</div>
+            <div class="col-md-6"><strong>Yükleme Tarihi:</strong> {{ shipment.pickup_date|date:"d M Y" }}</div>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-6"><strong>Mevcut Durum:</strong> <span class="badge bg-info">{{ shipment.get_status_display }}</span></div>
+            <div class="col-md-6"><strong>Mevcut Atanan Araç:</strong>
+                {% if shipment.assigned_vehicle %}
+                    <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=shipment.assigned_vehicle.pk %}" class="btn btn-sm btn-outline-primary ms-2">{{ shipment.assigned_vehicle.plate_number }}</a>
+                {% else %}
+                    <span class="text-muted">Atanmamış</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <hr>
+
+        <h5 class="mb-3 mt-4">Araç Atama Formu</h5>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="{{ form.assigned_vehicle.id_for_label }}" class="form-label">{{ form.assigned_vehicle.label }}</label>
+                {{ form.assigned_vehicle }}
+                {% for error in form.assigned_vehicle.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            </div>
+
+            <div class="d-flex justify-content-start align-items-center mt-4">
+                <button type="submit" name="action" value="assign" class="btn btn-primary me-2">
+                    <i class="fas fa-truck-pickup"></i> Aracı Ata/Güncelle
+                </button>
+                {% if shipment.assigned_vehicle %}
+                    <button type="submit" name="action" value="unassign" class="btn btn-danger me-2">
+                        <i class="fas fa-undo"></i> Atamayı Kaldır
+                    </button>
+                {% endif %}
+                <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci' shipment_id=shipment.id %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> İptal
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#{{ form.assigned_vehicle.id_for_label }}').select2({
+            theme: 'bootstrap-5',
+            placeholder: "Bir araç seçin...",
+            allowClear: true
+        });
+    });
+</script>
+{% endblock extra_scripts %}

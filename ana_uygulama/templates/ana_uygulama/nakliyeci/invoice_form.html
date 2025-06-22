@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% load static %}
+{% load l10n %} {# unlocalize filtresi için #}
+
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h4 class="mb-0">{{ page_title }}</h4>
+    </div>
+    <div class="card-body">
+        {# Django mesajlarını göstermek için #}
+        {% include 'ana_uygulama/includes/messages.html' %}
+
+        {# İlişkili gönderi bilgileri (sadece düzenleme veya oluşturma ekranında ilgili sevkiyat varsa göster) #}
+        {% if shipment %}
+        <h5 class="mt-4 mb-3">Faturalandırılacak İş Detayları (ID: {{ shipment.pk }})</h5>
+        <div class="row mb-3">
+            <div class="col-md-6"><strong>Müşteri Fabrika:</strong> {{ shipment.factory.name }}</div>
+            <div class="col-md-6"><strong>Yükleme Yeri:</strong> {{ shipment.origin }}</div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6"><strong>Teslimat Yeri:</strong> {{ shipment.destination }}</div>
+            <div class="col-md-6"><strong>Yükleme Tarihi:</strong> {{ shipment.pickup_date|date:"d M Y" }}</div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <strong>Fabrikaya Kesilecek Tutar (Net):</strong> {{ shipment.price_for_factory|floatformat:2 }} TL
+            </div>
+            <div class="col-md-6">
+                {# Durum alanını da gösterebiliriz #}
+                <strong>Durum:</strong> <span class="badge bg-secondary">{{ shipment.get_status_display }}</span>
+            </div>
+        </div>
+        <hr>
+        {% endif %}
+
+        <h5 class="mt-4 mb-3">Fatura Bilgileri</h5>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group mb-3">
+                        <label for="{{ form.invoice_number.id_for_label }}">{{ form.invoice_number.label }}</label>
+                        {{ form.invoice_number }}
+                        {% if form.invoice_number.errors %}<div class="text-danger">{% for error in form.invoice_number.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group mb-3">
+                        <label for="{{ form.invoice_type.id_for_label }}">{{ form.invoice_type.label }}</label>
+                        {{ form.invoice_type }}
+                        {% if form.invoice_type.errors %}<div class="text-danger">{% for error in form.invoice_type.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group mb-3">
+                        <label for="{{ form.issue_date.id_for_label }}">{{ form.issue_date.label }}</label>
+                        {{ form.issue_date }}
+                        {% if form.issue_date.errors %}<div class="text-danger">{% for error in form.issue_date.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group mb-3">
+                        <label for="{{ form.due_date.id_for_label }}">{{ form.due_date.label }}</label>
+                        {{ form.due_date }}
+                        {% if form.due_date.errors %}<div class="text-danger">{% for error in form.due_date.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group mb-3">
+                        <label for="{{ form.vat_rate.id_for_label }}">{{ form.vat_rate.label }}</label>
+                        {{ form.vat_rate }}
+                        {% if form.vat_rate.errors %}<div class="text-danger">{% for error in form.vat_rate.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-group mb-3">
+                        <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                        {{ form.status }}
+                        {% if form.status.errors %}<div class="text-danger">{% for error in form.status.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# Yeni Fatura Oluştururken veya Düzenlerken amount alanı hidden olsun, değeri JS ile yönetilsin #}
+            {{ form.amount.as_hidden }}
+            
+            {# Toplam Fatura Tutarı'nın gösterileceği alan #}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <p class="mb-0">
+                            <span class="fw-bold">Net Tutar (KDV Hariç):</span>
+                            <span id="netAmountDisplay" class="fw-bold me-3" 
+                                  data-net-amount="{% if shipment.price_for_factory is not None %}{{ shipment.price_for_factory|unlocalize }}{% else %}0.00{% endif %}">
+                                {% if shipment.price_for_factory is not None %}
+                                    {{ shipment.price_for_factory|floatformat:2 }} TL
+                                {% else %}
+                                    0.00 TL
+                                {% endif %}
+                            </span>
+                            <span class="fw-bold">Toplam Fatura Tutarı (KDV Dahil):</span>
+                            <span id="totalInvoiceAmount" class="fw-bold">
+                                {# Başlangıçta KDV oranı 0 ise Net tutarı gösterebiliriz #}
+                                {% if invoice.total_amount %}
+                                    {{ invoice.total_amount|floatformat:2 }} TL
+                                {% elif shipment.price_for_factory is not None %}
+                                    {{ shipment.price_for_factory|floatformat:2 }} TL
+                                {% else %}
+                                    0.00 TL
+                                {% endif %}
+                            </span>
+                        </p>
+                        <small>Formdaki KDV oranını değiştirdiğinizde, Toplam Fatura Tutarı otomatik hesaplanacaktır.</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end mt-4">
+                <button type="submit" class="btn btn-primary me-2">
+                    {% if invoice %} {# Eğer bir fatura objesi varsa (düzenleme modundaysa) #}
+                        Değişiklikleri Kaydet
+                    {% else %} {# Yeni fatura oluşturuluyorsa #}
+                        Faturayı Oluştur
+                    {% endif %}
+                </button>
+                <a href="{% url 'ana_uygulama:invoice_list_nakliyeci' %}" class="btn btn-secondary">İptal</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# JavaScript ile KDV hesaplama ve `amount` alanını güncelleme #}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // net_amount değerini data-net-amount özniteliğinden alın
+        const netAmountElement = document.getElementById('netAmountDisplay');
+        const netAmount = parseFloat(netAmountElement.dataset.netAmount);
+        
+        const vatRateInput = document.getElementById("{{ form.vat_rate.id_for_label }}");
+        const totalInvoiceAmountSpan = document.getElementById("totalInvoiceAmount");
+        const amountHiddenInput = document.getElementById("{{ form.amount.id_for_label }}"); // amount hidden input
+
+        function calculateAndSetTotalAmount() {
+            let vatRate = parseFloat(vatRateInput.value);
+            if (isNaN(vatRate)) {
+                vatRate = 0; // Geçersiz veya boş değer için 0 olarak kabul et
+            }
+            const totalAmount = netAmount * (1 + (vatRate / 100));
+            totalInvoiceAmountSpan.textContent = totalAmount.toFixed(2) + " TL";
+            // Gizli 'amount' alanını net tutar ile güncelle (formun göndereceği değer)
+            // Django DecimalField için virgül yerine nokta kullanılmalı.
+            amountHiddenInput.value = netAmount.toFixed(2); 
+        }
+
+        // KDV oranı inputu her değiştiğinde hesaplamayı yap
+        vatRateInput.addEventListener('input', calculateAndSetTotalAmount);
+
+        // Sayfa yüklendiğinde veya düzenleme ekranı açıldığında bir kere hesapla
+        calculateAndSetTotalAmount();
+    });
+</script>
+{% endblock %}

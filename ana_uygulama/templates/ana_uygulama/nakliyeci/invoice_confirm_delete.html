@@ -1,0 +1,40 @@
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/invoice_confirm_delete.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-sm">
+        <div class="card-header bg-danger text-white">
+            <h4 class="mb-0">Fatura Silme Onayı</h4>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-danger" role="alert">
+                <h5 class="alert-heading">Uyarı! Bu işlem geri alınamaz.</h5>
+                <p>
+                    <strong>{{ invoice.invoice_number }}</strong> numaralı faturayı silmek üzeresiniz.
+                    Bu işlem, ilgili iş verileriyle bağlantılı olabileceğinden dikkatli olun.
+                </p>
+                {% if shipment %}
+                    <p class="mb-0">İlgili Sevkiyat: <strong>ID: {{ shipment.pk }}</strong> ({{ shipment.origin }} - {{ shipment.destination }})</p>
+                {% else %}
+                    <p class="mb-0">Bu faturayla ilişkili bir sevkiyat bulunmamaktadır.</p>
+                {% endif %}
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger me-2">
+                    <i class="fas fa-trash-alt"></i> Silmeyi Onayla
+                </button>
+                {# Düzeltilmiş URL ve parametre adı #}
+                <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci' invoice_id=invoice.pk %}" class="btn btn-secondary">
+                    <i class="fas fa-times-circle"></i> İptal
+                </a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}

@@ -1,0 +1,128 @@
+<!-- ana_uygulama/templates/ana_uygulama/nakliyeci/shipment_form.html -->
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Yeni İş Girişi - {{ request.user.company.name }}{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {% if message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}<i class="fas fa-check-circle"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}<i class="fas fa-times-circle"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}<i class="fas fa-exclamation-triangle"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.INFO %}<i class="fas fa-info-circle"></i>
+                {% endif %}
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        
+        {% for hidden_field in form.hidden_fields %}
+            {{ hidden_field }}
+        {% endfor %}
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="{{ form.factory.id_for_label }}" class="form-label">{{ form.factory.label }}
+                        {% if form.factory.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.factory }}
+                    {% for error in form.factory.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+             <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="{{ form.status.id_for_label }}" class="form-label">{{ form.status.label }}
+                        {% if form.status.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.status }}
+                    {% for error in form.status.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="{{ form.origin.id_for_label }}" class="form-label">{{ form.origin.label }}
+                        {% if form.origin.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.origin }}
+                    {% for error in form.origin.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-group mb-3">
+                    <label for="{{ form.destination.id_for_label }}" class="form-label">{{ form.destination.label }}
+                        {% if form.destination.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.destination }}
+                    {% for error in form.destination.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="{{ form.load_description.id_for_label }}" class="form-label">{{ form.load_description.label }}
+                {% if form.load_description.field.required %}<span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ form.load_description }}
+            {% for error in form.load_description.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="row">
+            <div class="col-md-4">
+                <div class="form-group mb-3">
+                    <label for="{{ form.pickup_date.id_for_label }}" class="form-label">{{ form.pickup_date.label }}
+                        {% if form.pickup_date.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.pickup_date }}
+                    {% for error in form.pickup_date.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group mb-3">
+                    <label for="{{ form.price_for_factory.id_for_label }}" class="form-label">{{ form.price_for_factory.label }}
+                        {% if form.price_for_factory.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.price_for_factory }}
+                    {% for error in form.price_for_factory.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group mb-3">
+                    <label for="{{ form.cost_for_shipper.id_for_label }}" class="form-label">{{ form.cost_for_shipper.label }}
+                        {% if form.cost_for_shipper.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.cost_for_shipper }}
+                    {% for error in form.cost_for_shipper.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="form-group mb-3">
+            <label for="{{ form.assigned_vehicle.id_for_label }}" class="form-label">{{ form.assigned_vehicle.label }}
+                {% if form.assigned_vehicle.field.required %}<span class="text-danger">*</span>{% endif %}
+            </label>
+            {{ form.assigned_vehicle }}
+            {% for error in form.assigned_vehicle.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+            <small class="form-text text-muted">Bir araç seçerseniz, muayene ve sigorta durumu kontrol edilecektir.</small>
+        </div>
+
+        <div class="mt-4">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> İşi Kaydet</button>
+            <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
+        </div>
+        
+        
+
+    </form>
+{% endblock %}
+
+            
