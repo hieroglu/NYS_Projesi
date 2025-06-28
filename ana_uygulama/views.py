@@ -52,8 +52,7 @@ fabrika_required = user_company_type_required('FABRIKA')
 def logout_view(request):
     logout(request)
     messages.info(request, "Başarıyla çıkış yaptınız.")
-    return redirect('ana_uygulama:login')
-
+    return redirect(settings.LOGIN_URL)
 # === Dashboard View ===
 @login_required
 def dashboard_view(request):
@@ -1395,11 +1394,8 @@ def invoice_mark_as_paid_nakliyeci_view(request, invoice_id):
 
 
 @login_required
-def invoice_detail_nakliyeci_view(request, invoice_id):
-    """
-    Displays the details of a specific invoice for the shipper role.
-    """
-    invoice = get_object_or_404(Invoice, pk=invoice_id)
+def invoice_detail_nakliyeci_view(request, pk):  # DOĞRU
+    invoice = get_object_or_404(Invoice, pk=pk)
 
     if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu faturayı görüntüleme izniniz yok.")
@@ -1411,13 +1407,10 @@ def invoice_detail_nakliyeci_view(request, invoice_id):
         'calculated_vat_amount': invoice.total_vat_amount if invoice.total_vat_amount is not None else Decimal('0.00'),
         'calculated_total_amount': invoice.total_amount if invoice.total_amount is not None else Decimal('0.00'),
     }
-    return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', context)
+    return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', {'invoice': invoice })
 
 @login_required
-def invoice_update_view(request, pk):
-    """
-    View for the shipper to update invoice information.
-    """
+def invoice_update_nakliyeci_view(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
 
     if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
@@ -1447,7 +1440,22 @@ def invoice_update_view(request, pk):
     return render(request, 'ana_uygulama/nakliyeci/invoice_form.html', context)
 
 @login_required
-def invoice_delete_view(request, pk):
+@user_company_type_required('NAKLIYECI') # Sadece Nakliyeci rolü için erişilebilir
+def shipment_remove_vehicle_nakliyeci_view(request, pk):
+    shipment = get_object_or_404(Shipment, pk=pk, shipper_company=request.user.company)
+    if request.method == 'POST':
+        # Aracın atamasını kaldır
+        shipment.assigned_vehicle = None
+        # Sevkiyat durumunu "Atandı"dan başka bir duruma (örn: "Yeni" veya "Onay Bekliyor"a) çevirebilirsiniz.
+        # Örneğin: shipment.status = 'NEW'
+        shipment.save()
+        messages.success(request, f"'{shipment.load_description}' sevkiyatından araç ataması başarıyla kaldırıldı.")
+        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', pk=shipment.id)
+    # POST dışındaki istekler için (örn: direkt URL'e gidildiğinde) detay sayfasına yönlendir.
+    return redirect('ana_uygulama:shipment_detail_nakliyeci_view', pk=shipment.id)
+
+@login_required
+def invoice_delete_nakliyeci_view(request, pk):
     """
     View for the shipper to delete an invoice.
     """

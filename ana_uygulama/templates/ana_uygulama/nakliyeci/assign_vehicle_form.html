@@ -2,74 +2,99 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block page_title %}{{ page_title }}{% endblock page_title %}
+{% block title %}Araç Ata{% endblock %}
+{% block page_title %}Araç Ata{% endblock %}
 
 {% block content %}
-<div class="card shadow-sm">
-    <div class="card-header">
-        <h4 class="mb-0">{{ page_title }}</h4>
+    {# Django mesajlarını göstermek için includes/messages.html dosyasını dahil ediyoruz #}
+    {% include 'ana_uygulama/includes/messages.html' %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Sevkiyat Bilgileri</h6>
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">{{ shipment.factory.name }} - {{ shipment.origin }} <i class="fas fa-arrow-right"></i> {{ shipment.destination }}</h5>
+            <p class="card-text">
+                <strong>Yükleme Açıklaması:</strong> {{ shipment.load_description }}<br>
+                <strong>Yükleme Tarihi:</strong> {{ shipment.pickup_date|date:"d M Y" }}<br>
+                <strong>Fabrika Fiyatı:</strong> {{ shipment.price_for_factory }} TL<br>
+                <strong>Nakliyeci Maliyeti:</strong> {{ shipment.cost_for_shipper }} TL
+            </p>
+            <p class="card-text">
+                <strong>Mevcut Durum:</strong>
+                <span class="badge 
+                    {% if shipment.status == 'NEW' %}bg-info
+                    {% elif shipment.status == 'PENDING_APPROVAL' %}bg-warning
+                    {% elif shipment.status == 'ASSIGNED' %}bg-primary
+                    {% elif shipment.status == 'IN_TRANSIT' %}bg-secondary
+                    {% elif shipment.status == 'DELIVERED' %}bg-success
+                    {% elif shipment.status == 'CANCELLED' %}bg-danger
+                    {% endif %}">
+                    {{ shipment.get_status_display }}
+                </span>
+            </p>
+        </div>
     </div>
-    <div class="card-body">
-        {% include 'ana_uygulama/includes/messages.html' %}
 
-        <h5 class="mb-3">İş Detayları (ID: {{ shipment.pk }})</h5>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Müşteri Fabrika:</strong> {{ shipment.factory.name }}</div>
-            <div class="col-md-6"><strong>Yükleme Yeri:</strong> {{ shipment.origin }}</div>
+    <div class="card shadow mb-4 mt-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Araç Ata</h6>
         </div>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Teslimat Yeri:</strong> {{ shipment.destination }}</div>
-            <div class="col-md-6"><strong>Yükleme Tarihi:</strong> {{ shipment.pickup_date|date:"d M Y" }}</div>
+        <div class="card-body">
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {# Gizli alanları render et #}
+                {% for hidden_field in form.hidden_fields %}
+                    {{ hidden_field }}
+                {% endfor %}
+
+                <div class="form-group mb-3">
+                    <label for="{{ form.assigned_vehicle.id_for_label }}" class="form-label">{{ form.assigned_vehicle.label }}
+                        {% if form.assigned_vehicle.field.required %}<span class="text-danger">*</span>{% endif %}
+                    </label>
+                    {{ form.assigned_vehicle }}
+                    {% for error in form.assigned_vehicle.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                    <small class="form-text text-muted">
+                        <i class="fas fa-info-circle me-1"></i> Atamak istediğiniz aracı seçin. Aracın muayene ve sigorta durumu kontrol edilecektir.
+                    </small>
+                </div>
+
+                <div class="mt-4 text-end"> {# Butonları sağa hizalamak için text-end kullanıldı #}
+                    <button type="submit" class="btn btn-primary" name="action" value="assign"><i class="fas fa-truck me-1"></i> Aracı Ata/Güncelle</button>
+                    {% if shipment.assigned_vehicle %}
+                        <button type="button" class="btn btn-danger ms-2" data-bs-toggle="modal" data-bs-target="#removeVehicleModal">
+                            <i class="fas fa-undo me-1"></i> Atamayı Kaldır
+                        </button>
+                    {% endif %}
+                    {# URL hatasını düzeltildi: 'shipment_detail_nakliyeci' yerine 'shipment_detail_nakliyeci_view' kullanıldı #}
+                    <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci_view' shipment.id %}" class="btn btn-secondary ms-2">
+                        <i class="fas fa-times me-1"></i> İptal
+                    </a>
+                </div>
+            </form>
         </div>
-        <div class="row mb-4">
-            <div class="col-md-6"><strong>Mevcut Durum:</strong> <span class="badge bg-info">{{ shipment.get_status_display }}</span></div>
-            <div class="col-md-6"><strong>Mevcut Atanan Araç:</strong>
-                {% if shipment.assigned_vehicle %}
-                    <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=shipment.assigned_vehicle.pk %}" class="btn btn-sm btn-outline-primary ms-2">{{ shipment.assigned_vehicle.plate_number }}</a>
-                {% else %}
-                    <span class="text-muted">Atanmamış</span>
-                {% endif %}
-            </div>
-        </div>
-
-        <hr>
-
-        <h5 class="mb-3 mt-4">Araç Atama Formu</h5>
-        <form method="post">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label for="{{ form.assigned_vehicle.id_for_label }}" class="form-label">{{ form.assigned_vehicle.label }}</label>
-                {{ form.assigned_vehicle }}
-                {% for error in form.assigned_vehicle.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            </div>
-
-            <div class="d-flex justify-content-start align-items-center mt-4">
-                <button type="submit" name="action" value="assign" class="btn btn-primary me-2">
-                    <i class="fas fa-truck-pickup"></i> Aracı Ata/Güncelle
-                </button>
-                {% if shipment.assigned_vehicle %}
-                    <button type="submit" name="action" value="unassign" class="btn btn-danger me-2">
-                        <i class="fas fa-undo"></i> Atamayı Kaldır
-                    </button>
-                {% endif %}
-                <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci' shipment_id=shipment.id %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> İptal
-                </a>
-            </div>
-        </form>
     </div>
-</div>
-{% endblock content %}
 
-{% block extra_scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
-<script>
-    $(document).ready(function() {
-        $('#{{ form.assigned_vehicle.id_for_label }}').select2({
-            theme: 'bootstrap-5',
-            placeholder: "Bir araç seçin...",
-            allowClear: true
-        });
-    });
-</script>
-{% endblock extra_scripts %}
+    {# Atamayı Kaldır Onay Modalı #}
+    <div class="modal fade" id="removeVehicleModal" tabindex="-1" aria-labelledby="removeVehicleModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="removeVehicleModalLabel">Araç Atamasını Kaldır</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    Bu sevkiyattan atanan aracı kaldırmak istediğinizden emin misiniz?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <form method="post" action="{% url 'ana_uygulama:shipment_remove_vehicle_nakliyeci_view' shipment.id %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger" name="action" value="unassign">Atamayı Kaldır</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

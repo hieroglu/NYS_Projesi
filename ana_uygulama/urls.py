@@ -8,7 +8,7 @@ app_name = 'ana_uygulama' # Uygulama alanı (namespace)
 urlpatterns = [
     # Kimlik Doğrulama URL'leri
     path('login/', auth_views.LoginView.as_view(template_name='ana_uygulama/login.html'), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(next_page='ana_uygulama:login'), name='logout'),
+    path('logout/', views.logout_view, name='logout'),
 
     # Ana Sayfa / Kontrol Paneli
     path('dashboard/', views.dashboard_view, name='dashboard'),
@@ -32,6 +32,7 @@ urlpatterns = [
     path('nakliyeci/is/<int:shipment_id>/sil/', views.shipment_delete_nakliyeci_view, name='shipment_delete_nakliyeci_view'),
     path('nakliyeci/is/<int:shipment_id>/arac-ata/', views.assign_vehicle_to_shipment_view, name='assign_vehicle_to_shipment_view'),
     path('nakliyeci/is/<int:shipment_id>/durum-guncelle/', views.update_shipment_status_nakliyeci_view, name='update_shipment_status_nakliyeci_view'),
+    path('nakliyeci/sevkiyat/<int:pk>/arac-kaldir/', views.shipment_remove_vehicle_nakliyeci_view, name='shipment_remove_vehicle_nakliyeci_view'),
 
     # Araç Yönetimi
     path('nakliyeci/araclar/', views.vehicle_list_nakliyeci_view, name='vehicle_list_nakliyeci_view'),
@@ -52,20 +53,20 @@ urlpatterns = [
     path('nakliyeci/tasiyici/<int:carrier_id>/banka-hesabi/<int:pk>/sil/', views.carrier_bank_account_delete_view, name='carrier_bank_account_delete_view'),
 
     # Faturalar (Nakliyeci tarafından kesilen)
+
     path('nakliyeci/faturalar/', views.invoice_list_nakliyeci_view, name='invoice_list_nakliyeci_view'),
     path('nakliyeci/faturalar/sevkiyat/<int:shipment_id>/olustur/', views.invoice_create_view, name='invoice_create_view'),
-    path('nakliyeci/faturalar/<int:invoice_id>/detay/', views.invoice_detail_nakliyeci_view, name='invoice_detail_nakliyeci_view'),
-    path('nakliyeci/faturalar/<int:pk>/guncelle/', views.invoice_update_view, name='invoice_update_view'),
-    path('nakliyeci/faturalar/<int:pk>/sil/', views.invoice_delete_view, name='invoice_delete_view'),
-    path('nakliyeci/faturalar/<int:invoice_id>/odenmis-olarak-isaretle/', views.invoice_mark_as_paid_nakliyeci_view, name='invoice_mark_as_paid_nakliyeci_view'),
+    path('nakliyeci/faturalar/<int:pk>/detay/', views.invoice_detail_nakliyeci_view, name='invoice_detail_nakliyeci_view'),
+    path('nakliyeci/faturalar/<int:pk>/guncelle/', views.invoice_update_nakliyeci_view, name='invoice_update_nakliyeci_view'),
+    path('nakliyeci/faturalar/<int:pk>/odenmis-olarak-isaretle/', views.invoice_mark_as_paid_nakliyeci_view, name='invoice_mark_as_paid_nakliyeci_view'),
+    path('faturalar/<int:pk>/sil/', views.invoice_delete_nakliyeci_view, name='invoice_delete_nakliyeci_view'),
+
 
     # Ödemeler/Tahsilatlar (Nakliyeci)
     path('nakliyeci/odemeler/', views.payment_list_nakliyeci_view, name='payment_list_nakliyeci_view'),
     path('nakliyeci/odeme/yeni/', views.payment_create_nakliyeci_view, name='payment_create_nakliyeci_view'),
     path('nakliyeci/odeme/<int:pk>/detay/', views.payment_detail_nakliyeci_view, name='payment_detail_nakliyeci_view'),
     path('nakliyeci/odeme/<int:pk>/guncelle/', views.payment_update_nakliyeci_view, name='payment_update_nakliyeci_view'),
-    path('nakliyeci/odeme/<int:pk>/sil/', views.payment_delete_nakliyeci_view, name='payment_delete_nakliyeci_view'),
-
     # Banka Hesapları (Nakliyeci Şirketi Kendi Hesapları) - ÖNEMLİ: Modelde Carrier'a bağlı olduğu için bu kısım yorumlandı.
     # Eğer BankAccount doğrudan Company'ye bağlanacaksa models.py güncellenmeli.
     # Şu anki yapıya göre, banka hesapları taşıyıcılara aittir.
