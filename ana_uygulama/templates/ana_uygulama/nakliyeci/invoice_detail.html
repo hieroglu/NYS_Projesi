@@ -9,27 +9,37 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 mb-0 text-gray-800">Fatura Detayı - #{{ invoice.invoice_number }}</h1>
-        <div class="btn-group" role="group" aria-label="Fatura İşlemleri">
-            {# Fatura durumu 'ODENDI' (Ödendi) veya 'IPTAL' (İptal Edildi) değilse, düzenleme ve ödeme butonlarını göster #}
-            {% if invoice.status != 'ODENDI' and invoice.status != 'IPTAL' %}
-            <a href="{% url 'ana_uygulama:invoice_update_nakliyeci_view' pk=invoice.pk %}" class="btn btn-warning btn-sm">
-                <i class="fas fa-edit me-1"></i> Düzenle
+        <div class="btn-group" role="group" aria-label="Invoice Operations">
+            {% if invoice.status != 'PAID' and invoice.status != 'VOID' %}
+            <a href="{% url 'ana_uygulama:invoice_update_view' invoice.id %}" class="btn btn-warning btn-sm">
+                <i class="fas fa-edit"></i> Düzenle
             </a>
             {% endif %}
-            {# Fatura durumu 'ODENDI' (Ödendi) veya 'IPTAL' (İptal Edildi) değilse, ödendi işaretle butonunu göster #}
-            {% if invoice.status != 'ODENDI' and invoice.status != 'IPTAL' %}
-            <a href="{% url 'ana_uygulama:invoice_mark_as_paid_nakliyeci_view' pk=invoice.pk %}" class="btn btn-success btn-sm">
-                <i class="fas fa-money-bill-wave me-1"></i> Ödendi İşaretle
+            {% if invoice.status != 'PAID' and invoice.status != 'VOID' %}
+            <a href="{% url 'ana_uygulama:invoice_mark_as_paid_nakliyeci_view' invoice.id %}" class="btn btn-success btn-sm">
+                <i class="fas fa-money-bill-wave"></i> Ödendi İşaretle
             </a>
             {% endif %}
-            {# Faturayı silme butonu #}
-            <a href="{% url 'ana_uygulama:invoice_delete_nakliyeci_view' pk=invoice.pk %}" class="btn btn-danger btn-sm">
-                <i class="fas fa-trash me-1"></i> Sil
+            <a href="{% url 'ana_uygulama:invoice_list_nakliyeci_view' %}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Geri
             </a>
         </div>
     </div>
 
-    {% include 'ana_uygulama/includes/messages.html' %}
+    {# Include messages from Django's messages framework #}
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {% if message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}<i class="fas fa-check-circle"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}<i class="fas fa-times-circle"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}<i class="fas fa-exclamation-triangle"></i>
+                {% elif message.level == DEFAULT_MESSAGE_LEVELS.INFO %}<i class="fas fa-info-circle"></i>
+                {% endif %}
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
 
     <div class="row">
         <div class="col-lg-8">
@@ -46,16 +56,31 @@
                         <dd class="col-sm-8">{{ invoice.get_invoice_type_display }}</dd>
 
                         <dt class="col-sm-4">Kesilen Firma (Fabrika):</dt>
-                        <dd class="col-sm-8">{{ invoice.billed_to_factory.name }}</dd>
+                        <dd class="col-sm-8">
+                            {% if invoice.billed_to_factory %}
+                                <a href="{% url 'ana_uygulama:company_detail_view' invoice.billed_to_factory.pk %}" class="text-primary text-decoration-none">
+                                    {{ invoice.billed_to_factory.name }}
+                                </a>
+                            {% else %}
+                                Belirtilmemiş
+                            {% endif %}
+                        </dd>
 
                         <dt class="col-sm-4">Kesen Firma (Nakliyeci):</dt>
-                        <dd class="col-sm-8">{{ invoice.issued_by_shipper.name }}</dd>
+                        <dd class="col-sm-8">
+                            {% if invoice.issued_by_shipper %}
+                                <a href="{% url 'ana_uygulama:company_detail_view' invoice.issued_by_shipper.pk %}" class="text-primary text-decoration-none">
+                                    {{ invoice.issued_by_shipper.name }}
+                                </a>
+                            {% else %}
+                                Belirtilmemiş
+                            {% endif %}
+                        </dd>
 
                         <dt class="col-sm-4">İlgili Sevkiyat:</dt>
                         <dd class="col-sm-8">
                             {% if invoice.shipment %}
-                                {# Sevkiyat detay URL'sini düzeltildi: 'pk' yerine 'shipment_id' kullanıldı #}
-                                <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci_view' shipment_id=invoice.shipment.pk %}" class="text-primary text-decoration-none">
+                                <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci_view' invoice.shipment.id %}" class="text-primary text-decoration-none">
                                     #{{ invoice.shipment.tracking_number }} ({{ invoice.shipment.origin }} - {{ invoice.shipment.destination }})
                                 </a>
                             {% else %}
@@ -69,18 +94,21 @@
                         <dt class="col-sm-4">Vade Tarihi:</dt>
                         <dd class="col-sm-8">{{ invoice.due_date|date:"d M Y" }}</dd>
 
-                        <dt class="col-sm-4">Toplam Tutar:</dt>
-                        <dd class="col-sm-8">{{ invoice.total_amount|intcomma }} TL</dd>
+                        <dt class="col-sm-4">Net Tutar:</dt>
+                        <dd class="col-sm-8">{{ invoice.amount|intcomma }} TL</dd>
 
                         <dt class="col-sm-4">KDV Oranı:</dt>
-                        <dd class="col-sm-8">{% if invoice.vat_rate %}%{{ invoice.vat_rate}}{% else %}Belirtilmemiş{% endif %}</dd>
+                        <dd class="col-sm-8">{% if invoice.vat_rate %}%{{ invoice.vat_rate|floatformat:2 }}{% else %}Belirtilmemiş{% endif %}</dd>
 
-                        <dt class="col-sm-4">KDV Dahil Tutar:</dt>
-                        <dd class="col-sm-8">{{ invoice.total_amount_with_vat|intcomma }} TL</dd>
+                        <dt class="col-sm-4">KDV Tutarı:</dt>
+                        <dd class="col-sm-8">{{ calculated_vat_amount|intcomma }} TL</dd>
+
+                        <dt class="col-sm-4">Toplam Tutar (KDV Dahil):</dt>
+                        <dd class="col-sm-8">{{ calculated_total_amount|intcomma }} TL</dd>
 
                         <dt class="col-sm-4">Durum:</dt>
                         <dd class="col-sm-8">
-                            <span class="badge {% if invoice.status == 'GÖNDERİLDİ' %}bg-info{% elif invoice.status == 'ODENDI' %}bg-success{% elif invoice.status == 'KISMİ_ÖDEME' %}bg-warning{% elif invoice.status == 'VADESİ_GEÇTİ' %}bg-danger{% elif invoice.status == 'IPTAL' %}bg-secondary{% endif %}">
+                            <span class="badge {% if invoice.status == 'SENT' %}bg-info{% elif invoice.status == 'PAID' %}bg-success{% elif invoice.status == 'PARTIALLY_PAID' %}bg-warning{% elif invoice.status == 'OVERDUE' %}bg-danger{% elif invoice.status == 'VOID' %}bg-secondary{% else %}bg-secondary{% endif %}">
                                 {{ invoice.get_status_display }}
                             </span>
                         </dd>
@@ -101,6 +129,23 @@
         <div class="col-lg-4">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Ödeme Durumu</h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Fatura Toplamı:</strong> {{ invoice.total_amount|intcomma }} TL</p>
+                    <p><strong>Ödenen Tutar:</strong> {{ total_paid|intcomma }} TL</p>
+                    <p><strong>Kalan Bakiye:</strong>
+                        {% if remaining_balance|floatformat:2 > 0.00 %}
+                            <span class="text-danger">{{ remaining_balance|intcomma }} TL</span>
+                        {% else %}
+                            <span class="text-success">{{ remaining_balance|intcomma }} TL</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">İlgili Ödemeler</h6>
                 </div>
                 <div class="card-body">
@@ -108,12 +153,13 @@
                         <ul class="list-group">
                             {% for payment in invoice.payment_set.all %}
                             <li class="list-group-item d-flex justify-content-between align-items-center">
-                                {{ payment.amount|intcomma }} TL - {{ payment.payment_date|date:"d M Y" }}
-                                <span class="badge {% if payment.direction == 'INCOMING' %}bg-success{% else %}bg-info{% endif %}">
-                                    {{ payment.get_direction_display }}
-                                </span>
-                                {# Ödeme detay URL'sini düzeltildi: 'pk' parametresi kullanıldı #}
-                                <a href="{% url 'ana_uygulama:payment_detail_nakliyeci_view' pk=payment.pk %}" class="btn btn-info btn-sm">Detay</a>
+                                <div>
+                                    <strong>{{ payment.amount|intcomma }} TL</strong> - {{ payment.payment_date|date:"d M Y" }}
+                                    <br>
+                                    <small class="text-muted">{{ payment.get_direction_display }}</small>
+                                    {% if payment.counterparty_name %}<br><small class="text-muted">({{ payment.counterparty_name }})</small>{% endif %}
+                                </div>
+                                <a href="{% url 'ana_uygulama:payment_detail_nakliyeci_view' payment.id %}" class="btn btn-info btn-sm">Detay</a>
                             </li>
                             {% endfor %}
                         </ul>
@@ -124,6 +170,66 @@
                     {% endif %}
                 </div>
             </div>
+
+            {# New Payment Entry Card #}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Yeni Ödeme Girişi</h6>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {% for hidden_field in payment_form.hidden_fields %}
+                            {{ hidden_field }}
+                        {% endfor %}
+
+                        <div class="mb-3">
+                            <label for="{{ payment_form.amount.id_for_label }}" class="form-label">
+                                {{ payment_form.amount.label }}
+                                {% if payment_form.amount.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ payment_form.amount }}
+                            {% for error in payment_form.amount.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                            <small class="form-text text-muted">Ödeme tutarı.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ payment_form.payment_date.id_for_label }}" class="form-label">
+                                {{ payment_form.payment_date.label }}
+                                {% if payment_form.payment_date.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ payment_form.payment_date }}
+                            {% for error in payment_form.payment_date.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                            <small class="form-text text-muted">Ödemenin yapıldığı tarih.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ payment_form.notes.id_for_label }}" class="form-label">
+                                {{ payment_form.notes.label }}
+                                {% if payment_form.notes.field.required %}<span class="text-danger">*</span>{% endif %}
+                            </label>
+                            {{ payment_form.notes }}
+                            {% for error in payment_form.notes.errors %}
+                                <div class="invalid-feedback d-block">{{ error }}</div>
+                            {% endfor %}
+                            <small class="form-text text-muted">Ödeme ile ilgili notlar.</small>
+                        </div>
+
+                        {# Remaining hidden fields - already made HiddenInput in view #}
+                        {# payment_form.invoice, payment_form.shipment, payment_form.direction, payment_form.shipper_company #}
+                        
+                        <button type="submit" class="btn btn-primary mt-3">
+                            <i class="fas fa-plus-circle"></i> Ödeme Ekle
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {# /New Payment Entry Card #}
+
         </div>
     </div>
 </div>

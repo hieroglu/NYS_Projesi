@@ -147,7 +147,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> {% if vehicle %}Değişiklikleri Kaydet{% else %}Aracı Kaydet{% endif %}
                     </button>
-                    <a href="{% if vehicle %}{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=vehicle.id %}{% else %}{% url 'ana_uygulama:vehicle_list_nakliyeci' %}{% endif %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
+                    <a href="{% if vehicle %}{% url 'ana_uygulama:vehicle_detail_nakliyeci_view' vehicle_id=vehicle.id %}{% else %}{% url 'ana_uygulama:vehicle_list_nakliyeci' %}{% endif %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
                 </div>
             </form>
         </div>

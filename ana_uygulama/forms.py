@@ -183,7 +183,7 @@ class VehicleForm(forms.ModelForm):
             'insurance_expiry_date': 'Sigorta Bitiş Tarihi',
             'driver_name': 'Sürücü Adı Soyadı',
             'driver_phone': 'Sürücü Telefonu',
-            'license_plate_image': 'Plaka Görseli',
+            'license_plate_image': 'Sürücü Belgesi Görseli',
             'vehicle_license_image': 'Araç Ruhsat Görseli',
             'insurance_document': 'Sigorta Poliçesi',
             'inspection_document': 'Muayene Belgesi',
@@ -547,16 +547,15 @@ class BankAccountForm(forms.ModelForm):
         # You can customize fields here if needed.
 
 class PaymentForm(forms.ModelForm):
-    """
-    Form for creating and updating Payment/Collection records.
-    Filters related fields based on the user's company type.
-    """
+    
     class Meta:
         model = Payment
         fields = [
             'direction', 'amount', 'payment_date', 'description',
-            'invoice', 'shipment', 'counterparty_company', 'counterparty_name'
+            'invoice', 'shipment', 'counterparty_company', 'counterparty_name',
+            'shipper_company' # shipper_company alanını Meta.fields'a ekledik
         ]
+        
         widgets = {
             'direction': forms.Select(attrs={'class': 'form-select'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
@@ -566,6 +565,7 @@ class PaymentForm(forms.ModelForm):
             'shipment': forms.Select(attrs={'class': 'form-select select2-enable', 'data-placeholder': "İlgili Sevkiyat Seçin (Opsiyonel)"}),
             'counterparty_company': forms.Select(attrs={'class': 'form-select select2-enable', 'data-placeholder': "Karşı Taraf Firma Seçin (Opsiyonel)"}),
             'counterparty_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'shipper_company': forms.HiddenInput(), # Bu alanı gizli yaptık
         }
         labels = {
             'direction': 'Yön',
@@ -576,14 +576,21 @@ class PaymentForm(forms.ModelForm):
             'shipment': 'İlişkili Sevkiyat',
             'counterparty_company': 'Karşı Taraf Firma',
             'counterparty_name': 'Karşı Taraf Adı (Serbest Metin)',
+            'shipper_company': 'Nakliyeci Firma', # Label for consistency
         }
 
     def __init__(self, *args, **kwargs):
-        request_user = kwargs.pop('request_user', None)
+        request_user = kwargs.pop('user', None) # request_user'ı kwargs'tan çıkar
         super().__init__(*args, **kwargs)
 
         if request_user and request_user.company:
             user_company = request_user.company
+            
+            # shipper_company alanını otomatik doldur ve devre dışı bırak
+            if 'shipper_company' in self.fields: # Alanın var olduğundan emin olun
+                self.fields['shipper_company'].initial = user_company.pk
+                self.fields['shipper_company'].disabled = True
+                self.fields['shipper_company'].required = False # Otomatik ayarlandığı için zorunlu olmasın
 
             # Invoice filtering: Only invoices belonging to the relevant shipper or factory company
             if user_company.company_type == 'NAKLIYECI':
@@ -674,14 +681,17 @@ class PaymentForm(forms.ModelForm):
             if direction == 'INCOMING': # If it's a collection
                 if invoice.billed_to_factory != counterparty_company:
                     self.add_error('counterparty_company', "Tahsilat faturadaki faturalanan fabrika ile eşleşmelidir.")
-                if invoice.total_amount != cleaned_data.get('amount'):
-                    self.add_error('amount', "Tahsilat tutarı fatura toplam tutarına eşit olmalıdır.")
+                # Removed direct amount check here, it should be handled by update_status_based_on_payments in model.
+                # if invoice.total_amount != cleaned_data.get('amount'):
+                #     self.add_error('amount', "Tahsilat tutarı fatura toplam tutarına eşit olmalıdır.")
             elif direction == 'OUTGOING': # If it's a payment
-                if invoice.issued_by_shipper != self.instance.shipper_company: # If it's not our company, if it's the billing party
-                    if invoice.issued_by_shipper != counterparty_company: # If payment is made and invoice is not issued by our company
+                # If payment is made and invoice is not issued by our company, check counterparty
+                if invoice.issued_by_shipper != self.instance.shipper_company: 
+                    if invoice.issued_by_shipper != counterparty_company: 
                         self.add_error('counterparty_company', "Ödeme, faturayı kesen nakliyeci firma ile eşleşmelidir.")
-                if invoice.total_amount != cleaned_data.get('amount'):
-                    self.add_error('amount', "Ödeme tutarı fatura toplam tutarına eşit olmalıdır.")
+                # Removed direct amount check here, it should be handled by update_status_based_on_payments in model.
+                # if invoice.total_amount != cleaned_data.get('amount'):
+                #     self.add_error('amount', "Ödeme tutarı fatura toplam tutarına eşit olmalıdır.")
 
         # Consistency check if shipment exists and counterparty company is selected
         if shipment and counterparty_company:
@@ -703,3 +713,4 @@ class PaymentForm(forms.ModelForm):
             pass # It's okay if only a free-text counterparty name is entered.
         
         return cleaned_data
+

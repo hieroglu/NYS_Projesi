@@ -30,7 +30,7 @@
                     <i class="fas fa-trash-alt"></i> Silmeyi Onayla
                 </button>
                 {# Düzeltilmiş URL ve parametre adı #}
-                <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci' invoice_id=invoice.pk %}" class="btn btn-secondary">
+                <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci_view' invoice.id %}" class="btn btn-secondary">
                     <i class="fas fa-times-circle"></i> İptal
                 </a>
             </form>

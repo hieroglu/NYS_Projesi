@@ -54,7 +54,7 @@
                 <button type="submit" class="btn btn-primary btn-sm rounded-md shadow-sm me-2">
                     <i class="fas fa-filter me-1"></i> Filtrele
                 </button>
-                <a href="{% url 'ana_uygulama:invoice_list_nakliyeci' %}" class="btn btn-outline-secondary btn-sm rounded-md shadow-sm">
+                <a href="{% url 'ana_uygulama:invoice_list_nakliyeci_view' %}" class="btn btn-outline-secondary btn-sm rounded-md shadow-sm">
                     <i class="fas fa-times me-1"></i> Filtreleri Temizle
                 </a>
             </div>
@@ -107,13 +107,13 @@
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci_view' invoice_id=invoice.pk %}" class="btn btn-info btn-sm me-1" title="Detay">
+                                <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci_view' invoice.id %}" class="btn btn-info btn-sm me-1" title="Detay">
                                 <i class="fas fa-eye"></i>
                             </a>
-                            <a href="{% url 'ana_uygulama:invoice_update_view' pk=invoice.pk %}" class="btn btn-warning btn-sm me-1" title="Düzenle">
+                            <a href="{% url 'ana_uygulama:invoice_update_view' invoice.id %}" class="btn btn-warning btn-sm me-1" title="Düzenle">
                                 <i class="fas fa-edit"></i>
                             </a>
-                            <a href="{% url 'ana_uygulama:invoice_delete_view' pk=invoice.pk %}" class="btn btn-danger btn-sm me-1" title="Sil">
+                            <a href="{% url 'ana_uygulama:invoice_delete_view' invoice.id %}" class="btn btn-danger btn-sm me-1" title="Sil">
                                 <i class="fas fa-trash-alt"></i>
                             </a>
                             {% if invoice.status != 'PAID' and invoice.status != 'VOID' %}
@@ -122,7 +122,7 @@
                                         data-invoice-id="{{ invoice.pk }}"
                                         data-invoice-number="{{ invoice.invoice_number }}"
                                         title="Ödenmiş Olarak İşaretle">
-                                    <i class="fas fa-check-circle"></i> Ödeme Yap
+                                    <i class="fas fa-check-circle"></i> Ödenndi Olarak İşaretle
                                 </button>
                             {% endif %}
                         </td>

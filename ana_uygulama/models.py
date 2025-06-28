@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.core.validators import FileExtensionValidator
 from decimal import Decimal
 from django.conf import settings # AUTH_USER_MODEL için gerekli
+from django.db.models import Sum # Sum için eklendi
 
 # 1. Company (Firma) Modeli
 class Company(models.Model):
@@ -165,7 +166,7 @@ class Vehicle(models.Model):
         upload_to='vehicle_documents/plate_images/',
         blank=True,
         null=True,
-        verbose_name="Plaka Görseli",
+        verbose_name="Sürücü Belgesi Görseli",
         validators=[FileExtensionValidator(allowed_extensions=['pdf', 'jpg', 'jpeg', 'png'])]
     )
     vehicle_license_image = models.FileField(
@@ -380,6 +381,7 @@ class Invoice(models.Model):
         ('SENT', 'Gönderildi'),
         ('PAID', 'Ödendi'),
         ('PARTIALLY_PAID', 'Kısmen Ödendi'),
+        ('OVERDUE', 'Gecikmiş'),
         ('VOID', 'İptal Edildi'),
     ]
 
@@ -484,6 +486,31 @@ class Invoice(models.Model):
 
     def get_invoice_type_display(self):
         return dict(self.TYPE_CHOICES).get(self.invoice_type, self.invoice_type)
+    
+    def update_status_based_on_payments(self):
+        """
+        Updates the status of the invoice based on its payment history.
+        """
+        # Ensure Decimal is imported for calculations
+        from decimal import Decimal
+
+        total_paid_amount = self.payment_set.filter(direction='INCOMING').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+
+        if self.total_amount is None:
+            # If total_amount is not set (e.g., draft invoice without full calculation),
+            # default to SENT or DRAFT based on current status.
+            if self.status not in ['PAID', 'PARTIALLY_PAID', 'VOID']:
+                self.status = 'DRAFT' if self.status == 'DRAFT' else 'SENT'
+        elif total_paid_amount >= self.total_amount:
+            self.status = 'PAID'
+        elif total_paid_amount > 0 and total_paid_amount < self.total_amount:
+            self.status = 'PARTIALLY_PAID'
+        elif self.due_date < timezone.localdate() and total_paid_amount == 0:
+            self.status = 'OVERDUE'
+        else:
+            self.status = 'SENT' # Default status if not fully paid, partially paid, or overdue
+
+        self.save(update_fields=['status']) # Only save the status field
 
 
 # 9. Payment (Ödeme/Tahsilat) Modeli
@@ -511,7 +538,7 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Tutar")
     payment_date = models.DateField(default=timezone.now, verbose_name="Ödeme Tarihi")
     description = models.TextField(blank=True, null=True, verbose_name="Açıklama")
-    recorded_by_user = models.ForeignKey('CustomUser', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Kaydeden Kullanıcı")
+    recorded_by_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Kaydeden Kullanıcı")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -523,14 +550,11 @@ class Payment(models.Model):
         If no associated invoice, it is generally considered 'Paid'.
         """
         if self.invoice:
-            if self.amount >= self.invoice.total_amount:
-                return 'ODENDI'
-            elif self.amount > 0 and self.amount < self.invoice.total_amount:
-                return 'KISMI_ODEME'
-            elif self.payment_date < timezone.localdate():
-                return 'GECIKTI'
-            else:
-                return 'BEKLIYOR'
+            # Bu ödemenin faturanın toplamını karşılayıp karşılamadığına bakarak durum belirlenebilir.
+            # Ancak fatura durumu direkt Payment objesinin bir özelliği olmamalı,
+            # Invoice modelinin kendi `update_status_based_on_payments` metodu daha uygun.
+            # Burada sadece ödemenin kendisi ile ilgili bir durum dönebiliriz (örn: tamamlandı).
+            return 'ODENDI' # Basitçe her ödeme kaydedildiğinde 'Ödendi' olarak kabul edelim
         else:
             return 'ODENDI'
 
@@ -540,9 +564,9 @@ class Payment(models.Model):
         """
         status_map = {
             'ODENDI': 'Ödendi',
-            'BEKLIYOR': 'Bekliyor',
-            'GECIKTI': 'Gecikti',
-            'KISMI_ODEME': 'Kısmi Ödeme',
+            'BEKLIYOR': 'Bekliyor', # Bu Payment objesi için geçerli olmayabilir
+            'GECIKTI': 'Gecikti', # Bu Payment objesi için geçerli olmayabilir
+            'KISMI_ODEME': 'Kısmi Ödeme', # Bu Payment objesi için geçerli olmayabilir
         }
         return status_map.get(self.status, 'Bilinmiyor')
 
@@ -559,3 +583,4 @@ class Payment(models.Model):
         verbose_name = "Ödeme"
         verbose_name_plural = "Ödemeler"
         ordering = ['-payment_date', '-created_at']
+

@@ -1,6 +1,7 @@
 # ana_uygulama/views.py
 import calendar
 import json
+from django import forms
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -825,7 +826,7 @@ def assign_vehicle_to_shipment_view(request, shipment_id):
                 
                 # Check for vehicle warnings before assignment
                 warning_messages = []
-                if selected_vehicle.is_inspection_expired():
+                if selected_vehicle and selected_vehicle.is_inspection_expired():
                     warning_messages.append(f"{selected_vehicle.plate_number} muayenesi SÜRESİ DOLDU.")
                 elif selected_vehicle.inspection_expiry_date and selected_vehicle.inspection_expiry_date < (timezone.now().date() + timedelta(days=7)):
                     warning_messages.append(f"{selected_vehicle.plate_number} muayenesi YAKLAŞIYOR.")
@@ -1377,23 +1378,78 @@ def invoice_mark_as_paid_nakliyeci_view(request, invoice_id):
 
 
 @login_required
-def invoice_detail_nakliyeci_view(request, invoice_id):
-    """
-    Displays the details of a specific invoice for the shipper role.
-    """
-    invoice = get_object_or_404(Invoice, pk=invoice_id)
+@user_company_type_required('NAKLIYECI')
+def invoice_detail_nakliyeci_view(request, pk):
+    if request.method == 'POST':
+        payment_form = PaymentForm(request.POST, user=request.user)  # Burada user parametresini iletiyoruz
+        # Diğer işlemler...
+    else:
+        payment_form = PaymentForm(user=request.user)  # GET isteği için de user parametresini iletiyoruz
+    invoice = get_object_or_404(Invoice, pk=pk, issued_by_shipper=request.user.company)
+    payments = invoice.payment_set.all().order_by('-payment_date') # İlgili ödemeleri çek
 
-    if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
-        messages.error(request, "Bu faturayı görüntüleme izniniz yok.")
-        return redirect('ana_uygulama:invoice_list_nakliyeci')
+    # Faturanın toplam ödenen tutarını hesapla
+    total_paid = payments.filter(direction='INCOMING').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+    remaining_balance = invoice.total_amount - total_paid
+
+    if request.method == 'POST':
+        # Ödeme formu gönderilmişse
+        payment_form = PaymentForm(request.POST, user=request.user)
+        if payment_form.is_valid():
+            payment = payment_form.save(commit=False)
+            payment.invoice = invoice # Oluşturulan ödemeyi bu faturaya bağla
+            payment.shipper_company = request.user.company # Ödemeyi yapan nakliyeci firma
+            payment.direction = 'INCOMING' # Bu fatura için ödeme, nakliyeciye GİRİŞ (tahsilat) demektir.
+            payment.recorded_by_user = request.user # Kaydeden kullanıcı
+
+            # Eğer karşı taraf firma seçilmemişse, faturanın kesildiği fabrika otomatik olarak atanır.
+            if not payment.counterparty_company and invoice.billed_to_factory:
+                payment.counterparty_company = invoice.billed_to_factory
+            # Eğer karşı taraf adı girilmemişse, faturanın kesildiği fabrika adı otomatik olarak atanır.
+            if not payment.counterparty_name and invoice.billed_to_factory:
+                 payment.counterparty_name = invoice.billed_to_factory.name
+
+            payment.save()
+            messages.success(request, "Ödeme başarıyla kaydedildi.")
+            return redirect('ana_uygulama:invoice_detail_nakliyeci_view', pk=invoice.pk)
+        else:
+            messages.error(request, "Ödeme kaydedilirken bir hata oluştu. Lütfen form hatalarını kontrol edin.")
+            # Form geçersizse, mevcut ödemeleri ve fatura bilgilerini yeniden yükle
+            context = {
+                'invoice': invoice,
+                'payments': payments,
+                'payment_form': payment_form, # Hatalı formu şablona gönder
+                'page_title': f"Fatura Detayı - #{invoice.invoice_number}",
+                'total_paid': total_paid,
+                'remaining_balance': remaining_balance,
+            }
+            return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', context)
+    else:
+        # GET isteği ise, boş bir ödeme formu oluştur
+        payment_form = PaymentForm(user=request.user) # Boş bir form
+        # Ödeme formunda fatura ve sevkiyat alanlarını varsayılan olarak seçili getirmek için
+        # initial değerler atayabiliriz.
+        payment_form.fields['invoice'].initial = invoice
+        if invoice.shipment:
+            payment_form.fields['shipment'].initial = invoice.shipment
+        # Ayrıca, formun fatura veya sevkiyatla ilgili olmayan alanlarını gizleyebiliriz
+        # PaymentForm'da __init__ metodunda bu alanları gizlemek daha iyi olabilir.
+        payment_form.fields['invoice'].widget = forms.HiddenInput()
+        payment_form.fields['shipment'].widget = forms.HiddenInput()
+        payment_form.fields['direction'].widget = forms.HiddenInput() # Otomatik INCOMING olacak
+        payment_form.fields['shipper_company'].widget = forms.HiddenInput() # Otomatik atanacak
 
     context = {
         'invoice': invoice,
-        'page_title': f'{invoice.invoice_number} Detay',
-        'calculated_vat_amount': invoice.total_vat_amount if invoice.total_vat_amount is not None else Decimal('0.00'),
-        'calculated_total_amount': invoice.total_amount if invoice.total_amount is not None else Decimal('0.00'),
+        'payments': payments,
+        'payment_form': payment_form,
+        'page_title': f"Fatura Detayı - #{invoice.invoice_number}",
+        'total_paid': total_paid,
+        'remaining_balance': remaining_balance,
     }
     return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', context)
+
+
 
 @login_required
 def invoice_update_view(request, pk):

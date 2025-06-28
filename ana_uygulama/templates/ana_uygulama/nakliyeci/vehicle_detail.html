@@ -10,9 +10,9 @@
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">{{ vehicle.plate_number }}</h5>
             <div>
-                <a href="{% url 'ana_uygulama:vehicle_update_nakliyeci' vehicle_id=vehicle.id %}" class="btn btn-info btn-sm me-2" title="Düzenle"><i class="fa fa-edit"></i>Düzenle</a>
-                <a href="{% url 'ana_uygulama:vehicle_delete_nakliyeci' vehicle_id=vehicle.id %}" class="btn btn-danger btn-sm me-2" title="Sil" onclick="return confirm('Bu aracı silmek istediğinize emin misiniz?');"><i class="fa fa-trash"></i>Sil</a>
-                <a href="{% url 'ana_uygulama:vehicle_list_nakliyeci' %}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Listeye Dön</a>
+                <a href="{% url 'ana_uygulama:vehicle_update_nakliyeci_view' vehicle_id=vehicle.id %}" class="btn btn-info btn-sm me-2" title="Düzenle"><i class="fa fa-edit"></i>Düzenle</a>
+                <a href="{% url 'ana_uygulama:vehicle_delete_nakliyeci_view' vehicle_id=vehicle.id %}" class="btn btn-danger btn-sm me-2" title="Sil" onclick="return confirm('Bu aracı silmek istediğinize emin misiniz?');"><i class="fa fa-trash"></i>Sil</a>
+                <a href="{% url 'ana_uygulama:vehicle_list_nakliyeci_view' %}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Listeye Dön</a>
             </div>
         </div>
         <div class="card-body">

@@ -50,7 +50,7 @@
                     <tr class="{% if vehicle.is_inspection_expired or vehicle.is_insurance_expired %}table-danger{% elif vehicle.inspection_expiry_date and vehicle.inspection_expiry_date < thirty_days_later or vehicle.insurance_expiry_date and vehicle.insurance_expiry_date < thirty_days_later %}table-warning{% endif %}">
                         <td><strong>{{ vehicle.plate_number }}</strong></td>
                         <td>{{ vehicle.driver_name }}</td>
-                        <td>{{ vehicle.driver_phone_number|default:"-" }}</td>
+                        <td>{{ vehicle.driver_phone|default:"-" }}</td>
                         <td>
                             {% if vehicle.inspection_expiry_date %}
                                 {{ vehicle.inspection_expiry_date|date:"d F Y" }}

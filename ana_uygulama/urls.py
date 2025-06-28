@@ -58,8 +58,9 @@ urlpatterns = [
     path('nakliyeci/faturalar/', views.invoice_list_nakliyeci_view, name='invoice_list_nakliyeci_view'),
     path('nakliyeci/faturalar/sevkiyat/<int:shipment_id>/olustur/', views.invoice_create_view, name='invoice_create_view'),
     path('nakliyeci/faturalar/<int:pk>/detay/', views.invoice_detail_nakliyeci_view, name='invoice_detail_nakliyeci_view'),
-    # path('nakliyeci/faturalar/<int:pk>/guncelle/', views.invoice_update_nakliyeci_view, name='invoice_update_nakliyeci_view'),
+    path('nakliyeci/faturalar/<int:pk>/guncelle/', views.invoice_update_view, name='invoice_update_view'),
     path('nakliyeci/faturalar/<int:pk>/odenmis-olarak-isaretle/', views.invoice_mark_as_paid_nakliyeci_view, name='invoice_mark_as_paid_nakliyeci_view'),
+    path('nakliyeci/faturalar/<int:pk>/sil/', views.invoice_delete_view, name='invoice_delete_view'),
 
 
     # Ödemeler/Tahsilatlar (Nakliyeci)
