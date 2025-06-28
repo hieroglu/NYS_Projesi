@@ -16,559 +16,625 @@
     <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
 
     {# Özel CSS #}
-    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=1.2"> {# Versiyon numarası ile cache'i önle #}
-    {% block extra_css %}{% endblock %}
+    <link rel="stylesheet" href="{% static 'css/style.css' %}?v=1.1"> {# Versiyon numarası ile cache'i önle #}
+    {% block extra_css %}{% endblock extra_css %}
 
     <style>
+        /* Genel Stil Ayarlamaları (Örn: Body fontu, renkler) */
         :root {
-            --primary-color: #007bff;
-            --primary-light: #e6f2ff;
-            --secondary-color: #6c757d;
-            --success-color: #28a745;
-            --info-color: #17a2b8;
-            --warning-color: #ffc107;
-            --danger-color: #dc3545;
-            --text-dark: #343a40;
-            --text-muted: #6c757d;
-            --sidebar-bg: #343a40; /* Koyu gri */
-            --sidebar-text: rgba(255, 255, 255, 0.7);
-            --sidebar-hover-bg: #495057;
-            --sidebar-active-bg: #007bff;
-            --sidebar-active-text: #fff;
-            --header-bg: #ffffff;
-            --border-color: #dee2e6;
-            --card-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            --primary-color: #007bff;          /* Ana Mavi */
+            --primary-dark: #0056b3;           /* Ana Mavi Koyu Tonu */
+            --primary-light: #e6f2ff;          /* Ana Mavi Açık Tonu */
+            --secondary-color: #6c757d;         /* Gri */
+            --accent-color: #e74c3c;           /* Vurgu Kırmızı */
+            --success-color: #28a745;          /* Yeşil */
+            --info-color: #17a2b8;             /* Turkuaz */
+            --warning-color: #ffc107;          /* Sarı */
+            --danger-color: #dc3545;           /* Kırmızı */
+            --text-dark: #343a40;              /* Koyu Metin */
+            --text-muted: #6c757d;             /* Açık Gri Metin */
+            --card-bg: #ffffff;                /* Kart Arka Planı */
+            --border-color: #e9ecef;           /* Kenarlık Rengi */
+            --shadow-light: rgba(0, 0, 0, 0.08); /* Hafif Gölge */
+            --shadow-medium: rgba(0, 0, 0, 0.12); /* Orta Gölge */
+            --sidebar-bg: #2c3e50; /* Sidebar arka plan rengi */
+            --sidebar-text: #ecf0f1; /* Sidebar metin rengi */
+            --sidebar-hover: #34495e; /* Sidebar hover rengi */
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f8f9fa;
+            font-family: 'Inter', sans-serif; /* Tailwind CSS için Inter fontu önerilir */
+            margin: 0;
+            background-color: #f4f7f6;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+
+        /* Sayfa Düzeni */
+        .page-container {
             display: flex;
             min-height: 100vh;
-            color: var(--text-dark);
         }
 
-        #wrapper {
-            display: flex;
-            width: 100%;
-        }
-
-        #sidebar-wrapper {
-            min-width: 250px;
-            max-width: 250px;
-            background: var(--sidebar-bg);
+        /* Sidebar Stilleri */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-bg);
             color: var(--sidebar-text);
-            transition: all 0.3s;
-            box-shadow: var(--card-shadow);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            padding-top: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            overflow-y: auto; /* Scrollable if content overflows */
+            z-index: 1030; /* Ensure sidebar is above content but below navbar on mobile */
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(0);
         }
 
-        #wrapper.toggled #sidebar-wrapper {
-            margin-left: -250px;
+        .sidebar.collapsed {
+            transform: translateX(-260px);
         }
 
-        #page-content-wrapper {
-            width: 100%;
-            padding: 20px;
-        }
-
-        #wrapper.toggled #page-content-wrapper {
-            margin-left: -250px;
-        }
-
-        .sidebar-heading {
-            padding: 1.25rem 1rem;
-            font-size: 1.2rem;
-            color: #fff;
+        .sidebar-header {
+            padding: 0 20px 20px;
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
         }
-
-        .list-group-item {
-            background-color: var(--sidebar-bg);
-            color: var(--sidebar-text);
-            border: none;
-            padding: 1rem 1.5rem;
-            transition: all 0.2s;
-        }
-
-        .list-group-item:hover {
-            background-color: var(--sidebar-hover-bg);
+        .sidebar-header .logo-text {
+            font-size: 1.5rem;
+            font-weight: bold;
             color: #fff;
         }
 
-        .list-group-item.active {
-            background-color: var(--sidebar-active-bg) !important;
-            color: var(--sidebar-active-text) !important;
-            border-radius: 0;
-        }
-
-        .list-group-item .fas, .list-group-item .far {
-            margin-right: 10px;
-            width: 20px; /* İkonlar için sabit genişlik */
-            text-align: center;
-        }
-
-        /* Dropdown menu styling in sidebar */
-        .sidebar-dropdown-toggle {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            text-decoration: none;
-            color: var(--sidebar-text);
-            padding: 1rem 1.5rem;
-            transition: all 0.2s;
-            background-color: var(--sidebar-bg);
-            border: none;
-            cursor: pointer;
-            text-align: left;
-        }
-
-        .sidebar-dropdown-toggle:hover {
-            background-color: var(--sidebar-hover-bg);
-            color: #fff;
-        }
-
-        .sidebar-dropdown-toggle.active {
-            background-color: var(--sidebar-active-bg) !important;
-            color: var(--sidebar-active-text) !important;
-        }
-
-        .sidebar-dropdown-menu {
+        .sidebar-menu {
             list-style: none;
             padding: 0;
             margin: 0;
-            background-color: #2a2f34; /* Biraz daha koyu ton */
+            flex-grow: 1; /* Allows menu to take available space */
         }
 
-        .sidebar-dropdown-menu .list-group-item {
-            padding-left: 3.5rem; /* İkon ve metin hizalaması için */
-            font-size: 0.95rem;
-            color: rgba(255, 255, 255, 0.6);
+        .sidebar-menu .menu-item {
+            margin-bottom: 5px;
         }
 
-        .sidebar-dropdown-menu .list-group-item:hover {
-            background-color: #3e444a;
+        .sidebar-menu .menu-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            transition: background-color 0.2s ease, color 0.2s ease;
+            border-radius: 5px;
+            margin: 0 10px;
+        }
+
+        .sidebar-menu .menu-link:hover,
+        .sidebar-menu .menu-link.active {
+            background-color: var(--sidebar-hover);
             color: #fff;
+        }
+        .sidebar-menu .menu-link .fas,
+        .sidebar-menu .menu-link .far {
+            margin-right: 10px;
+            font-size: 1.1rem;
+        }
+
+        .sidebar-footer {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* Ana İçerik Alanı */
+        .main-content {
+            margin-left: 260px; /* Sidebar genişliği kadar boşluk */
+            flex-grow: 1;
+            padding: 20px;
+            transition: margin-left 0.3s ease-in-out;
+            width: calc(100% - 260px); /* Adjust width when sidebar is open */
+        }
+
+        .main-content.content-expanded {
+            margin-left: 0;
+            width: 100%;
         }
 
         /* Top Navbar */
         .navbar {
-            box-shadow: var(--card-shadow);
-            background-color: var(--header-bg);
+            background-color: #fff;
             border-bottom: 1px solid var(--border-color);
-            padding: 0.75rem 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 10px 20px;
+            z-index: 1020;
+            position: sticky;
+            top: 0;
         }
-        .navbar-brand {
+        .navbar .navbar-brand {
             font-weight: bold;
-            color: var(--primary-color) !important;
+            color: var(--primary-color);
         }
-
-        /* Content Area */
-        .card {
-            border-radius: 0.5rem;
-            border: 1px solid var(--border-color);
-            box-shadow: var(--card-shadow);
-            margin-bottom: 20px;
-        }
-        .card-header {
-            background-color: #f2f4f6;
-            border-bottom: 1px solid var(--border-color);
-            padding: 1rem 1.25rem;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border-top-left-radius: 0.5rem;
-            border-top-right-radius: 0.5rem;
-        }
-        .form-label {
-            font-weight: 500;
+        .navbar .nav-link {
             color: var(--text-dark);
+            margin-left: 15px;
         }
-        .form-control, .form-select {
-            border-radius: 0.3rem;
-            border: 1px solid #ced4da;
-            padding: 0.6rem 0.75rem;
+        .navbar .nav-link:hover {
+            color: var(--primary-color);
         }
-        .btn {
-            border-radius: 0.3rem;
-            padding: 0.6rem 1rem;
+        .navbar-toggler {
+            border: none;
         }
-        .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
-        .btn-primary:hover { background-color: #0056b3; border-color: #0056b3; }
-        .btn-outline-primary { color: var(--primary-color); border-color: var(--primary-color); }
-        .btn-outline-primary:hover { background-color: var(--primary-color); color: #fff; }
 
         /* Messages */
         .alert {
-            border-radius: 0.3rem;
-            padding: 0.75rem 1.25rem;
             margin-bottom: 1rem;
         }
 
-        /* Select2 custom styling */
-        .select2-container .select2-selection--single {
-            height: calc(2.25rem + 2px) !important;
-            border-radius: 0.3rem !important;
-            border: 1px solid #ced4da !important;
+        /* Form Stilleri */
+        .card {
+            border-radius: 0.75rem; /* Rounded corners for cards */
+            box-shadow: 0 4px 8px var(--shadow-light);
+            border: none;
         }
-        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
-            line-height: 2.25rem;
+        .card-header {
+            background-color: var(--primary-light);
+            color: var(--primary-dark);
+            font-weight: bold;
+            border-bottom: 1px solid var(--border-color);
+            border-top-left-radius: 0.75rem;
+            border-top-right-radius: 0.75rem;
         }
-        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow {
-            height: calc(2.25rem + 2px) !important;
+        .form-control, .form-select {
+            border-radius: 0.375rem; /* Slightly rounded for inputs */
+            border: 1px solid var(--border-color);
+            padding: 0.6rem 0.75rem;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
+        }
+        .btn {
+            border-radius: 0.375rem; /* Consistent button rounding */
+            padding: 0.6rem 1.2rem;
+            font-weight: 500;
+        }
+        .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
+        .btn-primary:hover { background-color: var(--primary-dark); border-color: var(--primary-dark); }
+        .btn-outline-primary { color: var(--primary-color); border-color: var(--primary-color); }
+        .btn-outline-primary:hover { background-color: var(--primary-color); color: #fff; }
+
+        /* Tables */
+        .table {
+            --bs-table-bg: #fff;
+            --bs-table-striped-bg: #f8f9fa;
+            --bs-table-active-bg: #e2e6ea;
+            --bs-table-hover-bg: #e2e6ea;
+            width: 100%;
+            margin-bottom: 1rem;
+            color: var(--text-dark);
+            vertical-align: middle;
+            border-color: var(--border-color);
+        }
+        .table th, .table td {
+            padding: 0.75rem;
+            vertical-align: top;
+            border-top: 1px solid var(--border-color);
+        }
+        .table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid var(--border-color);
+            background-color: var(--primary-light);
+            color: var(--primary-dark);
+        }
+        .table-striped tbody tr:nth-of-type(odd) {
+            background-color: var(--bs-table-striped-bg);
+        }
+        .table-hover tbody tr:hover {
+            background-color: var(--bs-table-hover-bg);
         }
 
-        /* Search bar in navbar */
-        .search-container {
-            position: relative;
-            width: 100%;
-            max-width: 300px; /* Adjust as needed */
+        /* Badges for status */
+        .badge {
+            padding: .4em .6em;
+            font-size: 85%;
+            font-weight: 600;
+            border-radius: .25rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 60px; /* Ensure minimum width for consistency */
         }
-        .search-input {
-            border-radius: 0.3rem;
-            border: 1px solid #ced4da;
-            padding: 0.4rem 1rem;
-            width: 100%;
+        .badge-success { background-color: var(--success-color); color: #fff; }
+        .badge-warning { background-color: var(--warning-color); color: var(--text-dark); }
+        .badge-info { background-color: var(--info-color); color: #fff; }
+        .badge-danger { background-color: var(--danger-color); color: #fff; }
+        .badge-primary { background-color: var(--primary-color); color: #fff; }
+        .badge-secondary { background-color: var(--secondary-color); color: #fff; }
+
+        /* Search bar styles */
+        .search-box {
+            position: relative;
+            width: 300px;
+        }
+        .search-box .form-control {
+            border-radius: 50rem; /* Pill shape */
+            padding-left: 2.5rem;
+        }
+        .search-box .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            z-index: 5; /* Ensure icon is above input field */
         }
         .search-results {
             position: absolute;
-            top: 100%;
+            top: 100%; /* Position below the input */
             left: 0;
             right: 0;
             background-color: #fff;
-            border: 1px solid #eee;
-            border-radius: 0.3rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            z-index: 1000;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             max-height: 300px;
             overflow-y: auto;
-            padding: 0.5rem 0;
+            z-index: 1000; /* Ensure it's above other content */
+            padding: 10px 0;
+            margin-top: 5px;
         }
-        .search-results a {
-            display: block;
-            padding: 0.5rem 1rem;
-            color: var(--text-dark);
-            text-decoration: none;
+        .search-results .list-group-item {
+            border: none;
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
         }
-        .search-results a:hover {
+        .search-results .list-group-item:last-child {
+            border-bottom: none;
+        }
+        .search-results .list-group-item:hover {
             background-color: var(--primary-light);
         }
+        .search-results .list-group-item a {
+            text-decoration: none;
+            color: var(--text-dark);
+            display: block;
+        }
+        .search-results .list-group-item span.type {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-right: 5px;
+        }
         .search-results .no-results {
-            padding: 0.5rem 1rem;
+            padding: 10px 15px;
             color: var(--text-muted);
             text-align: center;
         }
-
-        @media (min-width: 768px) {
-            #sidebar-wrapper {
-                margin-left: 0;
+        /* Media Queries for Responsiveness */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-260px); /* Hidden by default on mobile */
+                z-index: 1040; /* Higher z-index to overlay content when open */
+                box-shadow: 0 0 10px rgba(0,0,0,0.2);
             }
-            #page-content-wrapper {
-                min-width: 0;
+            .sidebar.active {
+                transform: translateX(0); /* Shown when active */
+            }
+            .main-content {
+                margin-left: 0; /* No margin on mobile, relies on sidebar overlay */
                 width: 100%;
             }
-            #wrapper.toggled #sidebar-wrapper {
-                margin-left: -250px;
-            }
-            #wrapper.toggled #page-content-wrapper {
-                margin-left: 0;
+            .navbar-toggler {
+                display: block; /* Show toggler on mobile */
             }
         }
     </style>
+    {% block extra_head %}{% endblock extra_head %}
 </head>
 <body>
-    <div class="d-flex" id="wrapper">
+    <div class="page-container">
         <!-- Sidebar -->
-        <div class="bg-dark border-right" id="sidebar-wrapper">
-            <div class="sidebar-heading">Nakliye Sistemi</div>
-            <div class="list-group list-group-flush">
-                <a href="{% url 'ana_uygulama:dashboard' %}" class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                    <i class="fas fa-tachometer-alt"></i> Kontrol Paneli
-                </a>
-
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <a href="{% url 'ana_uygulama:dashboard' %}" class="logo-text">Nakliye Yönetim Sistemi</a>
+            </div>
+            <ul class="sidebar-menu">
+                <li class="menu-item">
+                    <a href="{% url 'ana_uygulama:dashboard' %}" class="menu-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                        <i class="fas fa-chart-line me-2"></i> Kontrol Paneli
+                    </a>
+                </li>
+                
                 {# Nakliyeci Menüsü #}
                 {% if request.user.is_authenticated and request.user.company.company_type == 'NAKLIYECI' %}
-                <a href="#shipmentSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'shipment' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-truck"></i> İş Yönetimi <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="shipmentSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'shipment_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:shipment_list_nakliyeci_view' %}"><i class="fas fa-list"></i> Tüm İşler</a>
-                    </li>
-                    {# DÜZELTİLDİ: Yeni İş Ekle linki #}
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'shipment_create_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:shipment_create_nakliyeci' %}"><i class="fas fa-plus"></i> Yeni İş Ekle</a>
-                    </li>
-                </ul>
-
-                <a href="#quoteRequestSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'quote_request' in request.resolver_match.url_name and 'fabrika' not in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-file-invoice-dollar"></i> Teklif Talepleri <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="quoteRequestSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'quote_request_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:quote_request_list_nakliyeci' %}"><i class="fas fa-search-dollar"></i> Teklif Taleplerim</a>
-                    </li>
-                </ul>
-
-                <a href="#vehicleSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'vehicle' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-car"></i> Araç Yönetimi <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="vehicleSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'vehicle_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:vehicle_list_nakliyeci_view' %}"><i class="fas fa-truck-pickup"></i> Araçlarım</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'vehicle_create_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:vehicle_create_nakliyeci' %}"><i class="fas fa-plus-square"></i> Yeni Araç Ekle</a>
-                    </li>
-                </ul>
-
-                <a href="#carrierSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'carrier' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-users"></i> Taşıyıcılar <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="carrierSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'carrier_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:carrier_list_nakliyeci_view' %}"><i class="fas fa-user-friends"></i> Taşıyıcılarım</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'carrier_create_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:carrier_create_nakliyeci' %}"><i class="fas fa-user-plus"></i> Yeni Taşıyıcı Ekle</a>
-                    </li>
-                </ul>
-
-                <a href="#financeNakliyeciSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'invoice' in request.resolver_match.url_name or 'payment' in request.resolver_match.url_name or 'bank_account' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-money-check-alt"></i> Finans Yönetimi <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="financeNakliyeciSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'invoice_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:invoice_list_nakliyeci' %}"><i class="fas fa-file-invoice"></i> Faturalar</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'payment_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:payment_list_nakliyeci_view' %}"><i class="fas fa-money-bill-wave"></i> Ödemeler/Tahsilatlar</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'bank_account_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:bank_account_list_nakliyeci_view' %}"><i class="fas fa-bank"></i> Banka Hesapları</a>
-                    </li>
-                </ul>
-
-                <a href="#companyUsersNakliyeciSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'company_user' in request.resolver_match.url_name and 'fabrika' not in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-users-cog"></i> Firma Kullanıcıları <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="companyUsersNakliyeciSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_user_list_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_user_list_nakliyeci_view' %}"><i class="fas fa-user-tie"></i> Kullanıcı Listesi</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_user_create_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_user_create_nakliyeci_view' %}"><i class="fas fa-user-plus"></i> Yeni Kullanıcı Ekle</a>
-                    </li>
-                </ul>
-
-                <a href="#otherCompaniesNakliyeciSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'company_list_for_nakliyeci' in request.resolver_match.url_name or 'factory_create_by_nakliyeci' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-building"></i> Diğer Firmalar <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="otherCompaniesNakliyeciSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_list_for_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_list_for_nakliyeci_view' %}"><i class="fas fa-address-book"></i> Firma Rehberi</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'factory_create_by_nakliyeci_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:factory_create_by_nakliyeci_view' %}"><i class="fas fa-industry"></i> Yeni Müşteri Fabrika Ekle</a>
-                    </li>
-                </ul>
+                <li class="menu-item">
+                    <a href="#quoteSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if request.resolver_match.url_name == 'quote_request_list_nakliyeci_view' or request.resolver_match.url_name == 'create_quote_for_request_view' or request.resolver_match.url_name == 'update_quote_for_request_view' or request.resolver_match.url_name == 'quote_request_detail_nakliyeci_view' %}active{% endif %}">
+                        <i class="fas fa-file-invoice-dollar me-2"></i> Teklif Yönetimi
+                    </a>
+                    <ul class="collapse list-unstyled" id="quoteSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:quote_request_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'quote_request_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-list me-2"></i> Teklif Talepleri
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="#shipmentSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if request.resolver_match.url_name == 'shipment_list_nakliyeci_view' or request.resolver_match.url_name == 'shipment_create_nakliyeci_view' or request.resolver_match.url_name == 'shipment_detail_nakliyeci_view' or request.resolver_match.url_name == 'shipment_update_nakliyeci_view' %}active{% endif %}">
+                        <i class="fas fa-truck me-2"></i> İş Yönetimi
+                    </a>
+                    <ul class="collapse list-unstyled" id="shipmentSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:shipment_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'shipment_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-clipboard-list me-2"></i> İşlerim
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:shipment_create_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'shipment_create_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-plus-circle me-2"></i> Yeni İş Ekle
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="#vehicleSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if request.resolver_match.url_name == 'vehicle_list_nakliyeci_view' or request.resolver_match.url_name == 'vehicle_create_nakliyeci_view' or request.resolver_match.url_name == 'vehicle_detail_nakliyeci_view' or request.resolver_match.url_name == 'vehicle_update_nakliyeci_view' %}active{% endif %}">
+                        <i class="fas fa-truck-pickup me-2"></i> Araç Yönetimi
+                    </a>
+                    <ul class="collapse list-unstyled" id="vehicleSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:vehicle_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'vehicle_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-car me-2"></i> Araçlarım
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:vehicle_create_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'vehicle_create_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-plus me-2"></i> Yeni Araç Ekle
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="#carrierSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if request.resolver_match.url_name == 'carrier_list_nakliyeci_view' or request.resolver_match.url_name == 'carrier_create_nakliyeci_view' or request.resolver_match.url_name == 'carrier_detail_nakliyeci_view' or request.resolver_match.url_name == 'carrier_update_nakliyeci_view' %}active{% endif %}">
+                        <i class="fas fa-users-cog me-2"></i> Taşıyıcı Yönetimi
+                    </a>
+                    <ul class="collapse list-unstyled" id="carrierSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:carrier_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'carrier_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-user-friends me-2"></i> Taşıyıcılarım
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:carrier_create_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'carrier_create_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-user-plus me-2"></i> Yeni Taşıyıcı Ekle
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="#financeNakliyeciSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if 'invoice' in request.resolver_match.url_name or 'payment_list_nakliyeci_view' == request.resolver_match.url_name or 'bank_account_list_nakliyeci_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-chart-pie me-2"></i> Finans
+                    </a>
+                    <ul class="collapse list-unstyled" id="financeNakliyeciSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:invoice_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'invoice_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-file-invoice me-2"></i> Faturalar
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:payment_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'payment_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-wallet me-2"></i> Ödemeler/Tahsilatlar
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:bank_account_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'bank_account_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-piggy-bank me-2"></i> Banka Hesapları
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="#companyUserNakliyeciSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if 'company_user_list_nakliyeci_view' == request.resolver_match.url_name or 'company_user_create_nakliyeci_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-users me-2"></i> Firma Kullanıcıları
+                    </a>
+                    <ul class="collapse list-unstyled" id="companyUserNakliyeciSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:company_user_list_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'company_user_list_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-user-tie me-2"></i> Kullanıcı Listesi
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:company_user_create_nakliyeci_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'company_user_create_nakliyeci_view' %}active{% endif %}">
+                                <i class="fas fa-user-plus me-2"></i> Yeni Kullanıcı Ekle
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="{% url 'ana_uygulama:company_list_for_nakliyeci_view' %}" class="menu-link {% if request.resolver_match.url_name == 'company_list_for_nakliyeci_view' or request.resolver_match.url_name == 'factory_create_by_nakliyeci_view' %}active{% endif %}">
+                        <i class="fas fa-industry me-2"></i> Çalıştığım Fabrikalar
+                    </a>
+                </li>
                 {% endif %}
 
                 {# Fabrika Menüsü #}
                 {% if request.user.is_authenticated and request.user.company.company_type == 'FABRIKA' %}
-                <a href="#quoteRequestFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'quote_request' in request.resolver_match.url_name and 'nakliyeci' not in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-file-invoice-dollar"></i> Teklif Talepleri <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="quoteRequestFabrikaSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'quote_request_list_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:quote_request_list_fabrika_view' %}"><i class="fas fa-list-alt"></i> Taleplerim</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'quote_request_create_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:quote_request_create_fabrika_view' %}"><i class="fas fa-plus-circle"></i> Yeni Talep Oluştur</a>
-                    </li>
-                </ul>
-
-                <a href="#shipmentFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'shipment_list_fabrika' in request.resolver_match.url_name or 'shipment_detail_fabrika' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-truck-loading"></i> Sevkiyatlarım <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="shipmentFabrikaSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'shipment_list_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:shipment_list_fabrika_view' %}"><i class="fas fa-list-ul"></i> Tüm Sevkiyatlar</a>
-                    </li>
-                </ul>
-
-                <a href="#invoiceFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'invoice_list_fabrika' in request.resolver_match.url_name or 'invoice_detail_fabrika' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-file-invoice"></i> Faturalar <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="invoiceFabrikaSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'invoice_list_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:invoice_list_fabrika_view' %}"><i class="fas fa-file-alt"></i> Gelen Faturalar</a>
-                    </li>
-                </ul>
-
-                <a href="#paymentFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'payment_list_fabrika' in request.resolver_match.url_name or 'payment_create_fabrika' in request.resolver_match.url_name or 'payment_detail_fabrika' in request.resolver_match.url_name or 'payment_update_fabrika' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-coins"></i> Ödeme Yönetimi <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="paymentFabrikaSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'payment_list_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:payment_list_fabrika_view' %}"><i class="fas fa-credit-card"></i> Tüm Ödemeler</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'payment_create_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:payment_create_fabrika_view' %}"><i class="fas fa-money-check"></i> Yeni Ödeme Yap</a>
-                    </li>
-                </ul>
-
-                <a href="#companyUsersFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'company_user' in request.resolver_match.url_name and 'nakliyeci' not in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-users-cog"></i> Firma Kullanıcıları <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="companyUsersFabrikaSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_user_list_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_user_list_fabrika_view' %}"><i class="fas fa-user-tie"></i> Kullanıcı Listesi</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_user_create_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_user_create_fabrika_view' %}"><i class="fas fa-user-plus"></i> Yeni Kullanıcı Ekle</a>
-                    </li>
-                </ul>
-
-                <a href="#otherCompaniesFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'company_list_for_fabrika' in request.resolver_match.url_name or 'shipper_create_by_fabrika' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-building"></i> Diğer Firmalar <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="otherCompaniesFabrikaSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_list_for_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_list_for_fabrika_view' %}"><i class="fas fa-address-book"></i> Firma Rehberi</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'shipper_create_by_fabrika_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:shipper_create_by_fabrika_view' %}"><i class="fas fa-truck-moving"></i> Yeni Tedarikçi Ekle</a>
-                    </li>
-                </ul>
+                <li class="menu-item">
+                    <a href="#quoteFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if 'quote_request_list_fabrika_view' == request.resolver_match.url_name or 'quote_request_create_fabrika_view' == request.resolver_match.url_name or 'quote_request_detail_fabrika_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-file-contract me-2"></i> Teklif Taleplerim
+                    </a>
+                    <ul class="collapse list-unstyled" id="quoteFabrikaSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:quote_request_list_fabrika_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'quote_request_list_fabrika_view' %}active{% endif %}">
+                                <i class="fas fa-clipboard-list me-2"></i> Taleplerim
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:quote_request_create_fabrika_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'quote_request_create_fabrika_view' %}active{% endif %}">
+                                <i class="fas fa-plus-square me-2"></i> Yeni Talep Oluştur
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="{% url 'ana_uygulama:shipment_list_fabrika_view' %}" class="menu-link {% if 'shipment_list_fabrika_view' == request.resolver_match.url_name or 'shipment_detail_fabrika_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-shipping-fast me-2"></i> Sevkiyat Takibi
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="{% url 'ana_uygulama:invoice_list_fabrika_view' %}" class="menu-link {% if 'invoice_list_fabrika_view' == request.resolver_match.url_name or 'invoice_detail_fabrika_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-receipt me-2"></i> Faturalarım
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="{% url 'ana_uygulama:payment_list_fabrika_view' %}" class="menu-link {% if 'payment_list_fabrika_view' == request.resolver_match.url_name or 'payment_create_fabrika_view' == request.resolver_match.url_name or 'payment_detail_fabrika_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-money-check-alt me-2"></i> Ödemelerim
+                    </a>
+                </li>
+                <li class="menu-item">
+                    <a href="#companyUserFabrikaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle {% if 'company_user_list_fabrika_view' == request.resolver_match.url_name or 'company_user_create_fabrika_view' == request.resolver_match.url_name %}active{% endif %}">
+                        <i class="fas fa-users me-2"></i> Firma Kullanıcıları
+                    </a>
+                    <ul class="collapse list-unstyled" id="companyUserFabrikaSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:company_user_list_fabrika_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'company_user_list_fabrika_view' %}active{% endif %}">
+                                <i class="fas fa-user-tie me-2"></i> Kullanıcı Listesi
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'ana_uygulama:company_user_create_fabrika_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'company_user_create_fabrika_view' %}active{% endif %}">
+                                <i class="fas fa-user-plus me-2"></i> Yeni Kullanıcı Ekle
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                <li class="menu-item">
+                    <a href="{% url 'ana_uygulama:company_list_for_fabrika_view' %}" class="menu-link {% if request.resolver_match.url_name == 'company_list_for_fabrika_view' or request.resolver_match.url_name == 'shipper_create_by_fabrika_view' %}active{% endif %}">
+                        <i class="fas fa-shipping-fast me-2"></i> Tedarikçilerim
+                    </a>
+                </li>
                 {% endif %}
 
-                {# Superuser Menüsü (Örnek) #}
+                {# Süperkullanıcı Menüsü (gerekirse) #}
                 {% if request.user.is_superuser %}
-                <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="list-group-item list-group-item-action sidebar-dropdown-toggle {% if 'company' in request.resolver_match.url_name and 'for_nakliyeci' not in request.resolver_match.url_name and 'for_fabrika' not in request.resolver_match.url_name or 'admin' in request.resolver_match.url_name %}active{% endif %}">
-                    <i class="fas fa-user-shield"></i> Yönetici İşlemleri <i class="fas fa-chevron-down ms-auto"></i>
-                </a>
-                <ul class="collapse list-unstyled sidebar-dropdown-menu" id="adminSubmenu">
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_list_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_list_view' %}"><i class="fas fa-building"></i> Tüm Firmalar</a>
-                    </li>
-                    <li class="list-group-item {% if request.resolver_match.url_name == 'company_create_view' %}active{% endif %}">
-                        <a href="{% url 'ana_uygulama:company_create_view' %}"><i class="fas fa-plus"></i> Yeni Firma Oluştur</a>
-                    </li>
-                    {# Admin Panel Linki #}
-                    <li class="list-group-item">
-                        <a href="/admin/" target="_blank"><i class="fas fa-user-shield"></i> Django Admin</a>
-                    </li>
-                </ul>
+                <li class="menu-item">
+                    <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="menu-link dropdown-toggle">
+                        <i class="fas fa-tools me-2"></i> Yönetim
+                    </a>
+                    <ul class="collapse list-unstyled" id="adminSubmenu">
+                        <li>
+                            <a href="{% url 'ana_uygulama:company_list_view' %}" class="menu-link sub-menu-link {% if request.resolver_match.url_name == 'company_list_view' %}active{% endif %}">
+                                <i class="fas fa-building me-2"></i> Tüm Firmalar
+                            </a>
+                        </li>
+                         <li>
+                            <a href="{% url 'admin:index' %}" class="menu-link sub-menu-link" target="_blank">
+                                <i class="fas fa-cogs me-2"></i> Django Admin
+                            </a>
+                        </li>
+                    </ul>
+                </li>
                 {% endif %}
+            </ul>
 
-                <a href="{% url 'ana_uygulama:logout' %}" class="list-group-item list-group-item-action">
-                    <i class="fas fa-sign-out-alt"></i> Çıkış Yap
-                </a>
+            <div class="sidebar-footer">
+                <p>&copy; 2023 Nakliye Sistemi</p>
             </div>
-        </div>
-        <!-- /#sidebar-wrapper -->
+        </nav>
 
-        <!-- Page Content -->
-        <div id="page-content-wrapper">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom">
-                <button class="btn btn-primary" id="menu-toggle">
+        <!-- Main Content Wrapper -->
+        <div class="main-content" id="main-content">
+            <!-- Top Navbar -->
+            <nav class="navbar navbar-expand-lg">
+                <button type="button" id="sidebarCollapse" class="btn btn-outline-secondary me-3">
                     <i class="fas fa-bars"></i>
                 </button>
+                <a class="navbar-brand me-auto" href="{% url 'ana_uygulama:dashboard' %}">Kontrol Paneli</a>
 
-                <div class="ms-auto me-3">
-                    <div class="search-container">
-                        <input type="text" id="global-search-input" class="form-control search-input" placeholder="Sistemde Ara..." aria-label="Arama" autocomplete="off">
-                        <div id="search-results" class="search-results d-none">
-                            <!-- Arama sonuçları buraya eklenecek -->
-                        </div>
+                <div class="search-box me-3">
+                    <span class="search-icon"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="global-search-input" placeholder="Ara...">
+                    <div id="search-results" class="list-group search-results d-none">
+                        <!-- Arama sonuçları buraya eklenecek -->
                     </div>
                 </div>
 
-                <div class="dropdown">
-                    <button class="btn btn-secondary dropdown-toggle" type="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-user-circle me-2"></i> {% if request.user.is_authenticated %}{{ request.user.username }}{% else %}Misafir{% endif %}
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                        <li><a class="dropdown-item" href="#">Profilim</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{% url 'ana_uygulama:logout' %}">Çıkış Yap</a></li>
-                    </ul>
-                </div>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-user-circle me-1"></i> {{ request.user.first_name|default:request.user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="#">Profilim</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'ana_uygulama:logout' %}">Çıkış Yap</a></li>
+                        </ul>
+                    </li>
+                </ul>
             </nav>
 
+            <!-- Page Content -->
             <div class="container-fluid mt-4">
                 {% block content %}
-                <!-- İçerik burada olacak -->
+                <!-- Dinamik içerik buraya gelecek -->
                 {% endblock %}
             </div>
         </div>
-        <!-- /#page-content-wrapper -->
     </div>
-    <!-- /#wrapper -->
 
-    {# Bootstrap Bundle with Popper #}
+    {# Bootstrap 5 JS #}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {# jQuery #}
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    {# jQuery (Select2 için gerekli) #}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {# Select2 JS #}
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-
     <script>
-        // Sidebar Toggle
-        $("#menu-toggle").click(function(e) {
-            e.preventDefault();
-            $("#wrapper").toggleClass("toggled");
-        });
-
-        // Current Active Link Highlight
-        document.addEventListener("DOMContentLoaded", function() {
-            const currentPath = window.location.pathname;
-            document.querySelectorAll(".list-group-item a").forEach(link => {
-                // Remove base URL for comparison if present
-                const linkHref = link.getAttribute('href').replace(/^https?:\/\/[^\/]+\//, '/');
-                if (linkHref && currentPath.startsWith(linkHref) && linkHref !== '/') { // Avoid matching '/' too broadly
-                    link.closest(".list-group-item").classList.add("active");
-
-                    // If it's inside a submenu, also open the parent submenu
-                    const parentCollapse = link.closest(".collapse");
-                    if (parentCollapse) {
-                        const bsCollapse = new bootstrap.Collapse(parentCollapse, { toggle: false });
-                        bsCollapse.show();
-                        // Also set parent dropdown toggle as active if it's not already
-                        const parentToggle = parentCollapse.previousElementSibling;
-                        if (parentToggle && parentToggle.classList.contains('sidebar-dropdown-toggle')) {
-                            parentToggle.classList.add('active');
-                        }
-                    }
-                }
-            });
-            // Handle dashboard specifically if it's the root path (dashboard)
-            if (currentPath === '{% url "ana_uygulama:dashboard" %}' || currentPath === '/') {
-                document.querySelector('a[href="{% url "ana_uygulama:dashboard" %}"]').classList.add('active');
-            }
-        });
-
-
-        // Global Search with AJAX
         $(document).ready(function() {
-            let searchTimeout;
-            const searchInput = $('#global-search-input');
-            const searchResultsDiv = $('#search-results');
+            // Select2 etkinleştirme
+            $('.select2').select2({
+                theme: "bootstrap-5",
+                width: $(this).data('width') ? $(this).data('width') : $(this).hasClass('w-100') ? '100%' : 'style',
+                placeholder: $(this).data('placeholder'),
+                allowClear: Boolean($(this).data('allow-clear')),
+                selectionCssClass: 'select2--small',
+                dropdownCssClass: 'select2--small',
+            });
 
-            searchInput.on('input', function() {
+            // Sidebar toggle
+            $('#sidebarCollapse').on('click', function () {
+                $('#sidebar').toggleClass('collapsed');
+                $('#main-content').toggleClass('content-expanded');
+            });
+
+            // Mesajları otomatik kapatma
+            setTimeout(function() {
+                $('.alert').fadeOut('slow');
+            }, 5000); // 5 saniye sonra kapat
+
+            // Global canlı arama
+            let searchInput = $('#global-search-input');
+            let searchResultsDiv = $('#search-results');
+            let searchTimeout = null;
+
+            searchInput.on('keyup', function() {
                 clearTimeout(searchTimeout);
-                const query = $(this).val().trim();
+                let query = $(this).val();
 
                 if (query.length < 2) {
-                    searchResultsDiv.addClass('d-none').empty();
+                    searchResultsDiv.empty().addClass('d-none');
                     return;
                 }
 
                 searchTimeout = setTimeout(function() {
                     $.ajax({
-                        url: "{% url 'ana_uygulama:ajax_live_search' %}",
+                        url: "{% url 'ana_uygulama:ajax_live_search_view' %}",
                         data: {
                             'term': query
                         },
@@ -577,7 +643,10 @@
                             searchResultsDiv.empty();
                             if (data.results && data.results.length > 0) {
                                 data.results.forEach(item => {
-                                    const link = $('<a>').attr('href', item.url).text(`${item.type}: ${item.text}`);
+                                    const link = $('<a>')
+                                        .attr('href', item.url)
+                                        .addClass('list-group-item list-group-item-action')
+                                        .html(`<span class="type">${item.type}:</span> ${item.text}`);
                                     searchResultsDiv.append(link);
                                 });
                                 searchResultsDiv.removeClass('d-none');
@@ -586,7 +655,7 @@
                             }
                         },
                         error: function(xhr, status, error) {
-                            console.error('Arama hatası:', status, error);
+                            console.error('Arama hatası:', error);
                             searchResultsDiv.addClass('d-none');
                         }
                     });
@@ -599,9 +668,19 @@
                     searchResultsDiv.addClass('d-none');
                 }
             });
+            // Sayfa yüklendiğinde mevcut URL'ye göre sidebar menüsünü genişlet
+            // URL parçalarını kontrol ederek doğru alt menüyü açma
+            const path = window.location.pathname;
+            $('ul.collapse.list-unstyled a.menu-link.sub-menu-link').each(function() {
+                if (this.href === window.location.href || path.startsWith(this.pathname)) {
+                    $(this).closest('.collapse').addClass('show'); // Alt menüyü aç
+                    $(this).closest('.collapse').prev('.dropdown-toggle').attr('aria-expanded', 'true').addClass('active'); // Üst menü bağlantısını aktif yap
+                    $(this).addClass('active'); // Mevcut bağlantıyı aktif yap
+                }
+            });
         });
     </script>
 
-    {% block extra_scripts %}{% endblock %}
+    {% block extra_scripts %}{% endblock extra_scripts %}
 </body>
 </html>

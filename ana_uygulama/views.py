@@ -5,8 +5,8 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib import messages
 from django.contrib.auth import logout
+from django.contrib import messages
 from django.utils import timezone
 from datetime import date, timedelta
 from django.db.models import Sum, Q, Count # Count eklendi
@@ -24,8 +24,8 @@ from .forms import (
     CompanyUserCreationForm, QuoteRequestForm, VehicleForm, ShipmentFormNakliyeci,
     OfferPriceForm, AssignVehicleForm, ShipmentStatusUpdateForm, InvoiceForm,
     FactoryCreationByShipperForm, CarrierForm, BankAccountForm, CompanyForm,
-    PaymentForm, CustomUserChangeForm # CustomUserChangeForm da eklendi
-    )
+    PaymentForm
+)
 
 
 # === Yardımcı Fonksiyonlar / Decorator'lar ===
@@ -57,284 +57,342 @@ def logout_view(request):
 # === Dashboard View ===
 @login_required
 def dashboard_view(request):
+    """
+    Renders the customized dashboard based on the user's role (Shipper or Factory).
+    Displays different metrics for each company type.
+    """
     user = request.user
-    company = user.company
-    context = {}
-    
-    current_date = timezone.localdate()
-    # Son 6 ay için ay isimleri
-    month_labels = [calendar.month_name[(current_date - timedelta(days=30*i)).month] for i in range(5, -1, -1)]
+    today = timezone.now().date()
+    seven_days_later = today + timedelta(days=7)
+    thirty_days_ago = today - timedelta(days=30)
+    six_months_ago_start = (today - timedelta(days=180)).replace(day=1) # Son 6 ayın ilk günü
 
-    # Genel Bilgiler İçin Varsayılan Değerler
-    total_invoices_current_year = Decimal(0)
-    total_payments_current_year = Decimal(0)
-    active_vehicles_count = 0
-    average_shipment_duration = "N/A"
-    latest_activities = [] # Son hareketler listesi
-
-    # Grafik Verileri İçin Varsayılanlar
-    monthly_shipment_volume_data = [0] * 6 # Son 6 ay
-    payment_status_data = {'Ödendi': 0, 'Bekliyor': 0, 'Gecikti': 0, 'Kısmi Ödeme': 0}
-
-    # Kullanıcı tipine göre dashboard verilerini getir
-    if company:
-        if company.company_type == 'NAKLIYECI':
-            # Metrik Kartları
-            context['pending_quote_requests_count'] = QuoteRequest.objects.filter(
-                Q(shipper_company__isnull=True) | Q(shipper_company=company), # Kendi şirketine atanmamış veya kendisine ait
-                status='PENDING'
-            ).count()
-            context['in_progress_shipments_count'] = Shipment.objects.filter(
-                shipper_company=company,
-                status__in=['APPROVED', 'PICKED_UP', 'IN_TRANSIT']
-            ).count()
-            context['todays_pickup_shipments_count'] = Shipment.objects.filter(
-                shipper_company=company,
-                pickup_date=current_date
-            ).count()
-            # Nakliyeci için ödenmemiş faturalar (alacakları) - Kendi kestiği faturalar
-            context['total_unpaid_invoices_shipper'] = Invoice.objects.filter(
-                issued_by_shipper=company
-            ).exclude(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
-
-            # Genel Bilgiler
-            total_invoices_current_year = Invoice.objects.filter(
-                issued_by_shipper=company,
-                issue_date__year=current_date.year
-            ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
-
-            total_payments_current_year = Payment.objects.filter(
-                shipper_company=company, # Nakliyeci olarak kendisinin yaptığı veya aldığı ödemeler
-                payment_date__year=current_date.year
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal(0)
-
-            active_vehicles_count = Vehicle.objects.filter(owner_company=company, is_active=True).count()
-            
-            # Ortalama Sevkiyat Süresi (Tamamlanmış sevkiyatlar için)
-            completed_shipments = Shipment.objects.filter(
-                shipper_company=company,
-                status='COMPLETED',
-                pickup_date__isnull=False,
-                delivery_date__isnull=False
-            )
-            if completed_shipments.exists():
-                duration_sum = 0
-                count = 0
-                for s in completed_shipments:
-                    duration = (s.delivery_date - s.pickup_date).days
-                    if duration >= 0: # Negatif süreleri ele
-                        duration_sum += duration
-                        count += 1
-                if count > 0:
-                    average_shipment_duration = round(duration_sum / count, 1)
-
-            # Aylık Sevkiyat Hacmi Grafiği (Son 6 Ay)
-            # Sadece NAKLIYECI'nin tamamladığı sevkiyatları al
-            shipment_volumes = Shipment.objects.filter(
-                shipper_company=company,
-                pickup_date__gte=current_date - timedelta(days=180), # Son 6 ay
-                status__in=['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED'] # Geçiş halindeki veya tamamlanan
-            ).annotate(month=TruncMonth('pickup_date')).values('month').annotate(count=Count('id')).order_by('month')
-
-            monthly_shipment_volume_dict = {
-                (current_date - timedelta(days=30*i)).strftime('%b %Y'): 0 for i in range(5, -1, -1)
-            }
-            for entry in shipment_volumes:
-                month_key = entry['month'].strftime('%b %Y')
-                monthly_shipment_volume_dict[month_key] = entry['count']
-            
-            monthly_shipment_volume_data = {
-                'labels': list(monthly_shipment_volume_dict.keys()),
-                'data': list(monthly_shipment_volume_dict.values())
-            }
-
-            # Ödeme Durumu Dağılımı (Nakliyecinin alacakları)
-            all_incoming_payments = Payment.objects.filter(
-                shipper_company=company,
-                direction='INCOMING'
-            )
-            payment_status_counts = {'Ödendi': 0, 'Bekliyor': 0, 'Gecikti': 0, 'Kısmi Ödeme': 0}
-            for payment in all_incoming_payments:
-                payment_status_counts[payment.get_status_display()] += 1
-
-            payment_status_data = {
-                'labels': list(payment_status_counts.keys()),
-                'data': list(payment_status_counts.values())
-            }
-
-            # Son Hareketler (Sevkiyat, Fatura, Ödeme güncellemeleri)
-            latest_shipments = Shipment.objects.filter(shipper_company=company).order_by('-updated_at')[:3]
-            latest_invoices = Invoice.objects.filter(issued_by_shipper=company).order_by('-updated_at')[:3]
-            latest_payments = Payment.objects.filter(shipper_company=company).order_by('-updated_at')[:3]
-            
-            for s in latest_shipments:
-                latest_activities.append({
-                    'type': 'Sevkiyat',
-                    'description': f"Sevkiyat #{s.tracking_number} durumu güncellendi: {s.get_status_display()}",
-                    'date': s.updated_at,
-                    'url': reverse('ana_uygulama:shipment_detail_nakliyeci', args=[s.id])
-                })
-            for i in latest_invoices:
-                latest_activities.append({
-                    'type': 'Fatura',
-                    'description': f"Fatura #{i.invoice_number} güncellendi: {i.get_status_display()}",
-                    'date': i.updated_at,
-                    'url': reverse('ana_uygulama:invoice_detail_nakliyeci', args=[i.id])
-                })
-            for p in latest_payments:
-                latest_activities.append({
-                    'type': 'Ödeme',
-                    'description': f"{p.amount} TL ödeme kaydı güncellendi ({p.get_direction_display()})",
-                    'date': p.updated_at,
-                    'url': reverse('ana_uygulama:payment_detail_nakliyeci_view', args=[p.id])
-                })
-            
-            latest_activities = sorted(latest_activities, key=lambda x: x['date'], reverse=True)[:5] # En son 5 hareket
-
-        elif company.company_type == 'FABRIKA':
-            # Metrik Kartları
-            context['pending_offers_count'] = QuoteRequest.objects.filter(
-                factory=company, 
-                status='QUOTED' # Nakliyeciden teklif alınmış, fabrika onaylayacak
-            ).count()
-            context['active_shipments_factory_count'] = Shipment.objects.filter(
-                factory=company,
-                status__in=['APPROVED', 'PICKED_UP', 'IN_TRANSIT']
-            ).count()
-            context['quote_requests_waiting_for_approval_count'] = QuoteRequest.objects.filter(
-                factory=company, 
-                status='PENDING' # Fabrikanın oluşturduğu ama henüz teklif almadığı talepler
-            ).count()
-            # Fabrika için ödenmesi gereken faturalar (borçları)
-            context['total_outgoing_payments_factory'] = Invoice.objects.filter(
-                billed_to_factory=company
-            ).exclude(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
-
-            # Genel Bilgiler
-            total_invoices_current_year = Invoice.objects.filter(
-                billed_to_factory=company,
-                issue_date__year=current_date.year
-            ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
-
-            total_payments_current_year = Payment.objects.filter(
-                recorded_by_user__company=company, # Fabrika olarak kaydettiği ödemeler
-                payment_date__year=current_date.year
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal(0)
-
-            active_vehicles_count = 0 # Fabrikanın doğrudan aracı olmayabilir
-
-            # Aylık Sevkiyat Hacmi Grafiği (Fabrikanın tamamladığı sevkiyatlar)
-            shipment_volumes = Shipment.objects.filter(
-                factory=company,
-                pickup_date__gte=current_date - timedelta(days=180), # Son 6 ay
-                status__in=['PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED']
-            ).annotate(month=TruncMonth('pickup_date')).values('month').annotate(count=Count('id')).order_by('month')
-
-            monthly_shipment_volume_dict = {
-                (current_date - timedelta(days=30*i)).strftime('%b %Y'): 0 for i in range(5, -1, -1)
-            }
-            for entry in shipment_volumes:
-                month_key = entry['month'].strftime('%b %Y')
-                monthly_shipment_volume_dict[month_key] = entry['count']
-            
-            monthly_shipment_volume_data = {
-                'labels': list(monthly_shipment_volume_dict.keys()),
-                'data': list(monthly_shipment_volume_dict.values())
-            }
-
-            # Ödeme Durumu Dağılımı (Fabrikanın borçları)
-            all_outgoing_payments = Payment.objects.filter(
-                recorded_by_user__company=company,
-                direction='OUTGOING'
-            )
-            payment_status_counts = {'Ödendi': 0, 'Bekliyor': 0, 'Gecikti': 0, 'Kısmi Ödeme': 0}
-            for payment in all_outgoing_payments:
-                payment_status_counts[payment.get_status_display()] += 1
-            
-            payment_status_data = {
-                'labels': list(payment_status_counts.keys()),
-                'data': list(payment_status_counts.values())
-            }
-            
-            # Son Hareketler (Sevkiyat, Teklif, Ödeme güncellemeleri)
-            latest_shipments = Shipment.objects.filter(factory=company).order_by('-updated_at')[:3]
-            latest_quote_requests = QuoteRequest.objects.filter(factory=company).order_by('-updated_at')[:3]
-            latest_payments = Payment.objects.filter(recorded_by_user__company=company).order_by('-updated_at')[:3]
-            
-            for s in latest_shipments:
-                latest_activities.append({
-                    'type': 'Sevkiyat',
-                    'description': f"Sevkiyat #{s.tracking_number} durumu güncellendi: {s.get_status_display()}",
-                    'date': s.updated_at,
-                    'url': reverse('ana_uygulama:shipment_detail_fabrika', args=[s.id])
-                })
-            for qr in latest_quote_requests:
-                latest_activities.append({
-                    'type': 'Teklif Talebi',
-                    'description': f"Teklif Talebi #{qr.pk} durumu güncellendi: {qr.get_status_display()}",
-                    'date': qr.updated_at,
-                    'url': reverse('ana_uygulama:quote_request_detail_fabrika', args=[qr.id])
-                })
-            for p in latest_payments:
-                latest_activities.append({
-                    'type': 'Ödeme',
-                    'description': f"{p.amount} TL ödeme kaydı güncellendi ({p.get_direction_display()})",
-                    'date': p.updated_at,
-                    'url': reverse('ana_uygulama:payment_detail_fabrika_view', args=[p.id])
-                })
-            latest_activities = sorted(latest_activities, key=lambda x: x['date'], reverse=True)[:5] # En son 5 hareket
-
-
-        # Ortak Context Güncellemesi
-        context.update({
-            'total_invoices_current_year': total_invoices_current_year,
-            'total_payments_current_year': total_payments_current_year,
-            'active_vehicles_count': active_vehicles_count,
-            'average_shipment_duration': average_shipment_duration,
-            'monthly_shipment_volume': monthly_shipment_volume_data, # Grafik verileri
-            'payment_status_distribution': payment_status_data, # Grafik verileri
-            'latest_activities': latest_activities, # Son hareketler
-        })
-
-    else:
-        # Süperkullanıcı veya şirketi olmayan kullanıcılar için varsayılan genel metrikler
-        context['total_companies_count'] = Company.objects.count()
-        context['total_users_count'] = CustomUser.objects.count()
-        context['total_shipments_count'] = Shipment.objects.count()
-        context['total_invoices_count'] = Invoice.objects.count()
-
-        # Süperkullanıcı için de basit bir grafik verisi (örneğin tüm sevkiyatlar)
-        shipment_volumes = Shipment.objects.filter(
-            pickup_date__gte=current_date - timedelta(days=180),
-        ).annotate(month=TruncMonth('pickup_date')).values('month').annotate(count=Count('id')).order_by('month')
-        monthly_shipment_volume_dict = {
-            (current_date - timedelta(days=30*i)).strftime('%b %Y'): 0 for i in range(5, -1, -1)
+    # Kullanıcının bir firmaya atanıp atanmadığını kontrol edin
+    if not hasattr(user, 'company') or user.company is None:
+        messages.warning(request, "Henüz bir firmaya atanmadınız. Lütfen sistem yöneticisiyle iletişime geçin.")
+        context = {
+            'firma_adi': "Firma Atanmadı",
+            'kullanici_adi': user.first_name or user.username,
+            'is_nakliyeci': False,
+            'is_fabrika': False,
+            'today': today,
+            'page_title': 'Kontrol Paneli',
+            'aylik_is_etiketleri': json.dumps([]),
+            'aylik_is_cirolari': json.dumps([]),
+            'bekleyen_teklif_talepleri_sayisi': 0,
+            'onay_bekleyen_teklifler_sayisi': 0,
+            'toplam_aktif_is_sayisi': 0,
+            'toplam_arac_sayisi': 0,
+            'son_aktif_isler': [],
+            'muayenesi_gecmis_arac_sayisi': 0,
+            'sigortasi_gecmis_arac_sayisi': 0,
+            'muayenesi_yaklasan_araclar': [],
+            'sigortasi_yaklasan_araclar': [],
+            'bu_ay_kesilen_faturalar_toplami': Decimal('0.00'),
+            'odenmemis_fatura_sayisi': 0,
+            'vadesi_gecmis_tahsilat_sayisi': 0,
+            'gonderdigim_bekleyen_talepler_sayisi': 0,
+            'onayimi_bekleyen_teklifler_sayisi': 0,
+            'aktif_sevkiyatlarim_sayisi': 0,
+            'yaklasan_odeme_sayisi': 0,
+            'tamamlanan_sevkiyat_bu_ay_sayisi': 0,
+            'bu_ayki_toplam_fatura_tutari': Decimal('0.00'),
+            'vadesi_gecmis_odeme_sayisi': 0,
+            'recent_activities': []
         }
-        for entry in shipment_volumes:
-            month_key = entry['month'].strftime('%b %Y')
-            monthly_shipment_volume_dict[month_key] = entry['count']
-        context['monthly_shipment_volume'] = {
-            'labels': list(monthly_shipment_volume_dict.keys()),
-            'data': list(monthly_shipment_volume_dict.values())
-        }
+        return render(request, 'ana_uygulama/dashboard.html', context)
 
-        # Süperkullanıcı için ödeme durumu dağılımı (tüm ödemeler)
-        all_payments = Payment.objects.all()
-        payment_status_counts = {'Ödendi': 0, 'Bekliyor': 0, 'Gecikti': 0, 'Kısmi Ödeme': 0}
-        for payment in all_payments:
-            payment_status_counts[payment.get_status_display()] += 1
+    current_company = user.company
+
+    # Ortak bağlam verileri için varsayılanları başlatın
+    context = {
+        'firma_adi': current_company.name,
+        'kullanici_adi': user.first_name or user.username,
+        'is_nakliyeci': False,
+        'is_fabrika': False,
+        'today': today,
+        'page_title': 'Kontrol Paneli',
+        'aylik_is_etiketleri': json.dumps([]),
+        'aylik_is_cirolari': json.dumps([]),
+        'bekleyen_teklif_talepleri_sayisi': 0,
+        'onay_bekleyen_teklifler_sayisi': 0,
+        'toplam_aktif_is_sayisi': 0,
+        'toplam_arac_sayisi': 0,
+        'son_aktif_isler': [],
+        'muayenesi_gecmis_arac_sayisi': 0,
+        'sigortasi_gecmis_arac_sayisi': 0,
+        'muayenesi_yaklasan_araclar': [],
+        'sigortasi_yaklasan_araclar': [],
+        'bu_ay_kesilen_faturalar_toplami': Decimal('0.00'),
+        'odenmemis_fatura_sayisi': 0,
+        'vadesi_gecmis_tahsilat_sayisi': 0,
+        'gonderdigim_bekleyen_talepler_sayisi': 0,
+        'onayimi_bekleyen_teklifler_sayisi': 0,
+        'aktif_sevkiyatlarim_sayisi': 0,
+        'yaklasan_odeme_sayisi': 0,
+        'tamamlanan_sevkiyat_bu_ay_sayisi': 0,
+        'bu_ayki_toplam_fatura_tutari': Decimal('0.00'),
+        'vadesi_gecmis_odeme_sayisi': 0,
+        'last_items': [],
+        'recent_activities': [] # Başlangıçta boş
+    }
+
+    # Son Hareketler (Recent Activities) - Genel bir örnek
+    # Bu kısmı kendi uygulamanızdaki gerçek aktivite loglarına göre doldurmanız gerekecektir.
+    # Şimdilik örnek verilerle doldurulmuştur.
+    # Örnek: Son 5 sevkiyat veya faturayı activity olarak gösterilebilir.
+    if current_company.company_type == 'NAKLIYECI':
+        # Nakliyeci için son 5 sevkiyat veya fatura
+        recent_shipments = Shipment.objects.filter(shipper_company=current_company).order_by('-created_at')[:3]
+        recent_invoices = Invoice.objects.filter(issued_by_shipper=current_company).order_by('-created_at')[:2]
         
-        context['payment_status_distribution'] = {
-            'labels': list(payment_status_counts.keys()),
-            'data': list(payment_status_counts.values())
+        for s in recent_shipments:
+            context['recent_activities'].append({
+                'icon': 'fas fa-truck',
+                'message': f"Sevkiyat #{s.pk} ({s.get_status_display()})",
+                'date': s.created_at,
+                'url': reverse('ana_uygulama:shipment_detail_nakliyeci_view', args=[s.pk])
+            })
+        for i in recent_invoices:
+            context['recent_activities'].append({
+                'icon': 'fas fa-file-invoice-dollar',
+                'message': f"Fatura #{i.invoice_number} ({i.get_status_display()})",
+                'date': i.created_at,
+                'url': reverse('ana_uygulama:invoice_detail_nakliyeci_view', args=[i.pk])
+            })
+    elif current_company.company_type == 'FABRIKA':
+        # Fabrika için son 5 sevkiyat veya fatura
+        recent_shipments = Shipment.objects.filter(factory=current_company).order_by('-created_at')[:3]
+        recent_invoices = Invoice.objects.filter(billed_to_factory=current_company).order_by('-created_at')[:2]
+
+        for s in recent_shipments:
+            context['recent_activities'].append({
+                'icon': 'fas fa-truck-loading',
+                'message': f"Sevkiyat #{s.pk} ({s.get_status_display()})",
+                'date': s.created_at,
+                'url': reverse('ana_uygulama:shipment_detail_fabrika_view', args=[s.pk])
+            })
+        for i in recent_invoices:
+            context['recent_activities'].append({
+                'icon': 'fas fa-receipt',
+                'message': f"Fatura #{i.invoice_number} ({i.get_status_display()})",
+                'date': i.created_at,
+                'url': reverse('ana_uygulama:invoice_detail_fabrika_view', args=[i.pk])
+            })
+    
+    # Tarihe göre sırala ve ilk 5'i al
+    context['recent_activities'] = sorted(context['recent_activities'], key=lambda x: x['date'], reverse=True)[:5]
+
+
+    if current_company.company_type == 'NAKLIYECI':
+        context['is_nakliyeci'] = True
+
+        # Stat Kartları
+        # Bekleyen Teklif Talepleri: Nakliyeciye henüz fiyat verilmemiş, durumu 'PENDING' olan talepler
+        context['bekleyen_teklif_talepleri_sayisi'] = QuoteRequest.objects.filter(
+            status='PENDING'
+        ).count()
+        # Onay Bekleyen Teklifler: Nakliyecinin fiyat verdiği ama henüz kabul edilmemiş/reddedilmemiş talepler
+        context['onay_bekleyen_teklifler_sayisi'] = QuoteRequest.objects.filter(
+            priced_by_shipper_company=current_company, status='QUOTED'
+        ).count()
+        # Toplam Aktif İş Sayısı: Atama bekleyen, atandı, yolda olan sevkiyatlar
+        context['toplam_aktif_is_sayisi'] = Shipment.objects.filter(
+            shipper_company=current_company,
+            status__in=['PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_TRANSIT']
+        ).count()
+        # Toplam Araç Sayısı: Nakliyecinin yönettiği taşıyıcılara ait araçlar
+        context['toplam_arac_sayisi'] = Vehicle.objects.filter(
+            carrier__managed_by_shipper=current_company
+        ).count()
+
+        # Son Aktif İşler (Nakliyeci)
+        # Örnek: Durumu tamamlanmış, faturalanmış veya iptal edilmiş olmayan son 5 sevkiyat
+        context['son_aktif_isler'] = Shipment.objects.filter(
+            shipper_company=current_company
+        ).exclude(status__in=['DELIVERED', 'CANCELLED', 'BILLED', 'COMPLETED']).order_by('-created_at')[:5]
+
+        # Araç Uyarıları
+        nakliyeci_araclari = Vehicle.objects.filter(carrier__managed_by_shipper=current_company)
+        muayenesi_gecmis_araclar_list = []
+        sigortasi_gecmis_araclar_list = []
+        muayenesi_yaklasan_araclar_list = []
+        sigortasi_yaklasan_araclar_list = []
+
+        for vehicle in nakliyeci_araclari:
+            # Muayene kontrolü
+            if vehicle.inspection_expiry_date:
+                if vehicle.inspection_expiry_date < today:
+                    muayenesi_gecmis_araclar_list.append(vehicle)
+                elif today <= vehicle.inspection_expiry_date <= seven_days_later:
+                    muayenesi_yaklasan_araclar_list.append(vehicle)
+
+            # Sigorta kontrolü
+            if vehicle.insurance_expiry_date:
+                if vehicle.insurance_expiry_date < today:
+                    sigortasi_gecmis_araclar_list.append(vehicle)
+                elif today <= vehicle.insurance_expiry_date <= seven_days_later:
+                    sigortasi_yaklasan_araclar_list.append(vehicle)
+
+        context['muayenesi_gecmis_arac_sayisi'] = len(muayenesi_gecmis_araclar_list)
+        context['sigortasi_gecmis_arac_sayisi'] = len(sigortasi_gecmis_araclar_list)
+        context['muayenesi_yaklasan_araclar'] = muayenesi_yaklasan_araclar_list
+        context['sigortasi_yaklasan_araclar'] = sigortasi_yaklasan_araclar_list
+
+
+        # Finans Özeti (Nakliyeci - Kesilen faturalar ve tahsilatlar)
+        nakliyeci_faturalari = Invoice.objects.filter(issued_by_shipper=current_company)
+
+        # Bu ay kesilen faturaların toplamı
+        context['bu_ay_kesilen_faturalar_toplami'] = nakliyeci_faturalari.filter(
+            issue_date__month=today.month, issue_date__year=today.year
+        ).aggregate(total_sum=Sum('total_amount'))['total_sum'] or Decimal('0.00')
+
+        # Ödenmemiş fatura sayısı (ödendi veya iptal edildi olmayanlar)
+        context['odenmemis_fatura_sayisi'] = nakliyeci_faturalari.exclude(
+            status__in=['PAID', 'VOID']
+        ).count()
+        
+        # Vadesi geçmiş tahsilat sayısı (fabrika tarafından ödenmemiş ve vadesi geçmiş faturalar)
+        context['vadesi_gecmis_tahsilat_sayisi'] = nakliyeci_faturalari.filter(
+            due_date__lt=today
+        ).exclude(status__in=['PAID', 'VOID']).count()
+
+        # Aylık İş Hacmi (Son 6 Ay) Chart Data
+        monthly_ciro_data = {}
+        # Son 6 ayın etiketlerini ve başlangıç değerlerini hazırla
+        for i in range(6):
+            month_date = today - timedelta(days=(5-i) * 30) # En eski aydan başlayıp en yeniye doğru
+            month_key = (month_date.year, month_date.month)
+            monthly_ciro_data[month_key] = Decimal('0.00')
+
+        # İlgili faturaları filtrele ve aylık toplamları al
+        invoices_for_chart = nakliyeci_faturalari.filter(
+            issue_date__gte=six_months_ago_start
+        ).annotate(
+            month_year=TruncMonth('issue_date')
+        ).values('month_year').annotate(
+            total=Sum('total_amount')
+        ).order_by('month_year')
+
+        for item in invoices_for_chart:
+            month_key = (item['month_year'].year, item['month_year'].month)
+            if month_key in monthly_ciro_data:
+                monthly_ciro_data[month_key] = item['total']
+
+        # Chart.js için verileri hazırla
+        chart_labels = []
+        chart_data = []
+        # Ayları kronolojik sıraya göre sırala
+        sorted_month_keys = sorted(monthly_ciro_data.keys())
+        month_map_tr = {
+            1: 'Oca', 2: 'Şub', 3: 'Mar', 4: 'Nis', 5: 'May', 6: 'Haz',
+            7: 'Tem', 8: 'Ağu', 9: 'Eyl', 10: 'Eki', 11: 'Kas', 12: 'Ara'
         }
-        context['latest_activities'] = [] # Admin için daha detaylı hareketler eklenebilir
-        context['total_invoices_current_year'] = Invoice.objects.filter(issue_date__year=current_date.year).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
-        context['total_payments_current_year'] = Payment.objects.filter(payment_date__year=current_date.year).aggregate(Sum('amount'))['amount__sum'] or Decimal(0)
-        context['active_vehicles_count'] = Vehicle.objects.filter(is_active=True).count()
+
+        for year, month_num in sorted_month_keys:
+            month_label = f"{month_map_tr.get(month_num)} {year}"
+            chart_labels.append(month_label)
+            chart_data.append(float(monthly_ciro_data[(year, month_num)]))
+
+        context['aylik_is_etiketleri'] = json.dumps(chart_labels)
+        context['aylik_is_cirolari'] = json.dumps(chart_data)
+
+        # Son Teklif Talepleri (Nakliyeci) - Last Items
+        context['last_items'] = QuoteRequest.objects.filter(
+            Q(status='PENDING') | Q(priced_by_shipper_company=current_company)
+        ).order_by('-created_at')[:5]
 
 
-    context['page_title'] = "Kontrol Paneli"
+    elif current_company.company_type == 'FABRIKA':
+        context['is_fabrika'] = True
+
+        # Stat Kartları
+        # Gönderdiğim Bekleyen Teklif Talepleri Sayısı: Fabrikanın gönderdiği ve hala 'PENDING' durumunda olan talepler
+        context['gonderdigim_bekleyen_talepler_sayisi'] = QuoteRequest.objects.filter(
+            factory=current_company, status='PENDING'
+        ).count()
+        # Onayımı Bekleyen Teklifler Sayısı: Fabrikaya gelen ve durumu 'QUOTED' olan teklifler
+        context['onayimi_bekleyen_teklifler_sayisi'] = QuoteRequest.objects.filter(
+            factory=current_company, status='QUOTED'
+        ).count()
+        # Aktif Sevkiyatlarım Sayısı: Durumu teslim edildi, iptal edildi, faturalanmış veya tamamlanmış olmayan sevkiyatlar
+        context['aktif_sevkiyatlarim_sayisi'] = Shipment.objects.filter(
+            factory=current_company
+        ).exclude(status__in=['DELIVERED', 'CANCELLED', 'BILLED', 'COMPLETED']).count()
+        # Yaklaşan Ödeme Sayısı: Fabrikanın ödemesi gereken, vadesi bugün ile otuz gün sonrası arasında olan faturalar
+        context['yaklasan_odeme_sayisi'] = Invoice.objects.filter(
+            billed_to_factory=current_company,
+            status__in=['SENT', 'PARTIALLY_PAID'], # Sadece gönderilmiş veya kısmen ödenmiş faturalar
+            due_date__gte=today,
+            due_date__lte=today + timedelta(days=30)
+        ).count()
+
+        # Bu Ay Tamamlanan Sevkiyatlar
+        context['tamamlanan_sevkiyat_bu_ay_sayisi'] = Shipment.objects.filter(
+            factory=current_company,
+            status='DELIVERED',
+            delivery_date__month=today.month,
+            delivery_date__year=today.year
+        ).count()
+
+        # Finans Özeti (Fabrika için Harcama)
+        fabrika_faturalari = Invoice.objects.filter(billed_to_factory=current_company)
+        
+        # Bu ayki toplam fatura tutarı (Fabrikanın ödemesi gereken)
+        context['bu_ayki_toplam_fatura_tutari'] = fabrika_faturalari.filter(
+            issue_date__month=today.month, issue_date__year=today.year
+        ).aggregate(total_sum=Sum('total_amount'))['total_sum'] or Decimal('0.00')
+
+        # Vadesi geçmiş ödeme sayısı (Fabrikanın ödemesi gereken ve vadesi geçmiş faturalar)
+        context['vadesi_gecmis_odeme_sayisi'] = fabrika_faturalari.filter(
+            due_date__lt=today
+        ).exclude(status__in=['PAID', 'VOID']).count()
+
+        # Aylık Harcama Hacmi (Son 6 Ay) Chart Data
+        monthly_harcama_data = {}
+        for i in range(6):
+            month_date = today - timedelta(days=(5-i) * 30)
+            month_key = (month_date.year, month_date.month)
+            monthly_harcama_data[month_key] = Decimal('0.00')
+
+        invoices_for_chart = fabrika_faturalari.filter(
+            issue_date__gte=six_months_ago_start
+        ).annotate(
+            month_year=TruncMonth('issue_date')
+        ).values('month_year').annotate(
+            total=Sum('total_amount')
+        ).order_by('month_year')
+
+        for item in invoices_for_chart:
+            month_key = (item['month_year'].year, item['month_year'].month)
+            if month_key in monthly_harcama_data:
+                monthly_harcama_data[month_key] = item['total']
+
+        chart_labels = []
+        chart_data = []
+        sorted_month_keys = sorted(monthly_harcama_data.keys())
+        month_map_tr = {
+            1: 'Oca', 2: 'Şub', 3: 'Mar', 4: 'Nis', 5: 'May', 6: 'Haz',
+            7: 'Tem', 8: 'Ağu', 9: 'Eyl', 10: 'Eki', 11: 'Kas', 12: 'Ara'
+        }
+
+        for year, month_num in sorted_month_keys:
+            month_label = f"{month_map_tr.get(month_num)} {year}"
+            chart_labels.append(month_label)
+            chart_data.append(float(monthly_harcama_data[(year, month_num)]))
+
+        context['aylik_is_etiketleri'] = json.dumps(chart_labels)
+        context['aylik_is_cirolari'] = json.dumps(chart_data)
+
+        # Son Faturalar (Fabrika) - Last Items
+        last_invoices = Invoice.objects.filter(billed_to_factory=current_company).order_by('-issue_date')[:5]
+        for invoice in last_invoices:
+            invoice.is_overdue = invoice.due_date < today and not invoice.status in ['PAID', 'VOID']
+            invoice.is_due_soon = not invoice.status in ['PAID', 'VOID'] and today <= invoice.due_date <= seven_days_later
+        context['last_items'] = last_invoices
+
+
     return render(request, 'ana_uygulama/dashboard.html', context)
 
 
@@ -2118,14 +2176,13 @@ def global_search_view(request):
             vehicles = Vehicle.objects.filter(
                 Q(plate_number__icontains=query) | Q(driver_name__icontains=query)
             ).filter(carrier__managed_by_shipper=user_company)
-            results = []
             for v in vehicles.distinct()[:5]:
-                results.append({
+                # Correct the URL name to match urls.py (e.g., 'vehicle_detail_nakliyeci' without '_view')
+                context['results_vehicles'].append({
                     'type': 'Araç',
                     'text': f'{v.plate_number} ({v.driver_name})',
-                    'url': reverse('ana_uygulama:vehicle_detail_nakliyeci_view', args=[v.pk])
+                    'url': reverse('ana_uygulama:vehicle_detail_nakliyeci_view', args=[v.pk]) # Corrected URL name
                 })
-            context['results_vehicles'] = results
 
         # Carrier search
         carrier_q = (
@@ -2137,30 +2194,19 @@ def global_search_view(request):
         temp_carriers = Carrier.objects.filter(carrier_q)
         if is_shipper and user_company:
             temp_carriers = temp_carriers.filter(managed_by_shipper=user_company)
-        for c in temp_carriers.distinct()[:5]:
-            results.append({
-                'type': 'Taşıyıcı',
-                'text': f'Taşıyıcı: {c.full_name}',
-                'url': reverse('ana_uygulama:carrier_detail_nakliyeci_view', args=[c.pk])
-            })
+        context['results_carriers'] = temp_carriers.distinct()[:10]
 
         # Company (Factory) search
-        temp_factories = Company.objects.filter(
+        context['results_companies_factory'] = Company.objects.filter(
             Q(company_type='FABRIKA') &
             (Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query))
-        )
-        for f in temp_factories.distinct()[:5]:
-            results.append({
-                'type': 'Fabrika Firma',
-                'text': f'Fabrika: {f.name}',
-                'url': reverse('ana_uygulama:company_detail_view', args=[f.pk])
-            })
+        ).distinct()[:10]
 
         # Company (Shipper) search
         context['results_companies_shipper'] = Company.objects.filter(
             Q(company_type='NAKLIYECI') &
             (Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query)) &
-            ~Q(pk=user_company.pk if user_company else -1)
+            ~Q(pk=user_company.pk if user_company else -1) # Exclude own company
         ).distinct()[:10]
 
         # Invoice search
@@ -2174,7 +2220,139 @@ def global_search_view(request):
             temp_invoices = temp_invoices.filter(issued_by_shipper=user_company)
         elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
             temp_invoices = temp_invoices.filter(billed_to_factory=user_company)
-        for i in temp_invoices.distinct()[:5]:
+        context['results_invoices'] = temp_invoices.distinct()[:10]
+
+        # QuoteRequest search
+        quote_q = (
+            Q(pk__icontains=query) |
+            Q(origin__icontains=query) |
+            Q(destination__icontains=query) |
+            Q(factory__name__icontains=query)
+        )
+        temp_quotes = QuoteRequest.objects.filter(quote_q)
+        if is_shipper and user_company:
+            temp_quotes = temp_quotes.filter(Q(status='PENDING') | Q(priced_by_shipper_company=user_company))
+        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
+            temp_quotes = temp_quotes.filter(factory=user_company)
+        context['results_quote_requests'] = temp_quotes.distinct()[:10]
+
+        # Payment search
+        payment_q = (
+            Q(description__icontains=query) |
+            Q(amount__icontains=query) |
+            Q(invoice__invoice_number__icontains=query) |
+            Q(shipment__pk__icontains=query) |
+            Q(counterparty_company__name__icontains=query) |
+            Q(counterparty_name__icontains=query)
+        )
+        temp_payments = Payment.objects.filter(payment_q)
+        if is_shipper and user_company:
+            temp_payments = temp_payments.filter(shipper_company=user_company)
+        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
+            temp_payments = temp_payments.filter(recorded_by_user__company=user_company, direction='OUTGOING') # Fabrika için sadece giden ödemeler
+        context['results_payments'] = temp_payments.distinct()[:10]
+
+    return render(request, 'ana_uygulama/search_results.html', context)
+
+
+@login_required
+def ajax_live_search_view(request):
+    """
+    AJAX view that returns live search results.
+    Performs a lighter search and returns JsonResponse.
+    """
+    query = request.GET.get('term', '').strip()
+    results = []
+    if query and len(query) >= 2:
+        user_company = None
+        is_shipper = False
+        if request.user.is_authenticated and hasattr(request.user, 'company') and request.user.company:
+            user_company = request.user.company
+            if user_company.company_type == 'NAKLIYECI':
+                is_shipper = True
+
+        # Example: Shipment search
+        shipments = Shipment.objects.filter(
+            Q(origin__icontains=query) | Q(destination__icontains=query) | Q(pk__icontains=query)
+        )
+        if is_shipper and user_company:
+            shipments = shipments.filter(shipper_company=user_company)
+        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
+            shipments = shipments.filter(factory=user_company)
+
+        for s in shipments.distinct()[:5]: # Max 5 results
+            results.append({
+                'type': 'İş',
+                'text': f'#{s.pk}: {s.origin} -> {s.destination}',
+                'url': reverse('ana_uygulama:shipment_detail_nakliyeci_view', args=[s.pk]) if is_shipper else reverse('ana_uygulama:shipment_detail_fabrika_view', args=[s.pk])
+            })
+
+        # Example: Vehicle search (for shippers only)
+        if is_shipper and user_company:
+            vehicles = Vehicle.objects.filter(
+                Q(plate_number__icontains=query) | Q(driver_name__icontains=query)
+            ).filter(carrier__managed_by_shipper=user_company)
+            for v in vehicles.distinct()[:5]:
+                results.append({ # Append to results, not context['results_vehicles']
+                    'type': 'Araç',
+                    'text': f'{v.plate_number} ({v.driver_name})',
+                    'url': reverse('ana_uygulama:vehicle_detail_nakliyeci_view', args=[v.pk]) # Corrected URL name
+                })
+
+        # Carrier search
+        carrier_q = (
+            Q(full_name__icontains=query) |
+            Q(phone__icontains=query) |
+            Q(email__icontains=query) |
+            Q(tax_id_number__icontains=query)
+        )
+        temp_carriers = Carrier.objects.filter(carrier_q)
+        if is_shipper and user_company:
+            temp_carriers = temp_carriers.filter(managed_by_shipper=user_company)
+        for c in temp_carriers.distinct()[:5]: # Max 5 results
+            results.append({
+                'type': 'Taşıyıcı',
+                'text': f'Taşıyıcı: {c.full_name}',
+                'url': reverse('ana_uygulama:carrier_detail_nakliyeci_view', args=[c.pk])
+            })
+
+        # Company (Factory) search
+        temp_factories = Company.objects.filter(
+            Q(company_type='FABRIKA') &
+            (Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query))
+        )
+        for f in temp_factories.distinct()[:5]: # Max 5 results
+            results.append({
+                'type': 'Fabrika Firma',
+                'text': f'Fabrika: {f.name}',
+                'url': reverse('ana_uygulama:company_detail_view', args=[f.pk]) # Generic company detail for now
+            })
+
+        # Company (Shipper) search
+        temp_shippers = Company.objects.filter(
+            Q(company_type='NAKLIYECI') &
+            (Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query)) &
+            ~Q(pk=user_company.pk if user_company else -1) # Exclude own company
+        )
+        for s in temp_shippers.distinct()[:5]: # Max 5 results
+            results.append({
+                'type': 'Nakliyeci Firma',
+                'text': f'Nakliyeci: {s.name}',
+                'url': reverse('ana_uygulama:company_detail_view', args=[s.pk]) # Generic company detail for now
+            })
+
+        # Invoice search
+        invoice_q = (
+            Q(invoice_number__icontains=query) |
+            Q(billed_to_factory__name__icontains=query) |
+            Q(shipment__pk__icontains=query)
+        )
+        temp_invoices = Invoice.objects.filter(invoice_q)
+        if is_shipper and user_company:
+            temp_invoices = temp_invoices.filter(issued_by_shipper=user_company)
+        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
+            temp_invoices = temp_invoices.filter(billed_to_factory=user_company)
+        for i in temp_invoices.distinct()[:5]: # Max 5 results
             results.append({
                 'type': 'Fatura',
                 'text': f'Fatura: #{i.invoice_number} ({i.total_amount} TL)',
@@ -2193,7 +2371,7 @@ def global_search_view(request):
             temp_quotes = temp_quotes.filter(Q(status='PENDING') | Q(priced_by_shipper_company=user_company))
         elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
             temp_quotes = temp_quotes.filter(factory=user_company)
-        for qr in temp_quotes.distinct()[:5]:
+        for qr in temp_quotes.distinct()[:5]: # Max 5 results
             results.append({
                 'type': 'Teklif Talebi',
                 'text': f'Teklif Talebi: #{qr.pk} ({qr.get_status_display()})',
@@ -2214,11 +2392,386 @@ def global_search_view(request):
             temp_payments = temp_payments.filter(shipper_company=user_company)
         elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
             temp_payments = temp_payments.filter(recorded_by_user__company=user_company, direction='OUTGOING') # Fabrika için sadece giden ödemeler
-        for p in temp_payments.distinct()[:5]:
+        for p in temp_payments.distinct()[:5]: # Max 5 results
             results.append({
                 'type': 'Ödeme/Tahsilat',
-                'text': f'Ödeme/Tahsilat: {p.get_direction_display()} {p.amount} TL',
+                'text': f'Ödeme/Tahsilat: {p.get_direction_display()} {p.amount} TL', # get_direction_display eklendi
                 'url': reverse('ana_uygulama:payment_detail_nakliyeci_view' if is_shipper else 'ana_uygulama:payment_detail_fabrika_view', args=[p.pk])
             })
 
-        return JsonResponse({'results': results})
+        # Bank Account search (for own company accounts only)
+        bank_accounts = BankAccount.objects.filter(
+            Q(bank_name__icontains=query) | Q(iban__icontains=query)
+        )
+        if user_company:
+            # BankAccount modelinde 'company' alanı yok, doğrudan 'carrier' üzerinden şirkete bağlanıyor.
+            # Dolayısıyla, banka hesabını kendi şirketine ait carrier'lar üzerinden filtrelemeliyiz.
+            if is_shipper and user_company:
+                bank_accounts = bank_accounts.filter(carrier__managed_by_shipper=user_company)
+            # Fabrika için banka hesabı listeleme views'ı olmadığı varsayımıyla şimdilik boş bırakılabilir.
+            else:
+                bank_accounts = BankAccount.objects.none() # Fabrikaların direkt banka hesapları yönetimi yoksa
+
+        for ba in bank_accounts.distinct()[:5]:
+            results.append({
+                'type': 'Banka Hesabı',
+                'text': f'Banka Hesabı: {ba.bank_name} - {ba.iban}',
+                'url': reverse('ana_uygulama:bank_account_detail_nakliyeci_view', args=[ba.pk]) # Nakliyeci banka hesabı detayına yönlendir
+            })
+
+
+    return JsonResponse({'results': results})
+
+
+# === Factory - User Management ===
+@login_required
+def company_user_list_fabrika_view(request):
+    """
+    Lists company users for the factory company manager.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+    users = CustomUser.objects.filter(company=request.user.company)
+    context = {'users': users, 'company_type_display': 'Fabrika', 'page_title': "Firma Kullanıcıları"}
+    return render(request, 'ana_uygulama/company_user_list.html', context)
+
+@login_required
+def company_user_create_fabrika_view(request):
+    """
+    View for the factory company manager to add new users to their company.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+    if request.method == 'POST':
+        form = CompanyUserCreationForm(request.POST)
+        if form.is_valid():
+            new_user = form.save(commit=False)
+            new_user.company = request.user.company
+            new_user.is_staff = False
+            new_user.save()
+            messages.success(request, f"Kullanıcı {new_user.username} başarıyla eklendi.")
+            return redirect('ana_uygulama:company_user_list_fabrika_view')
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = CompanyUserCreationForm()
+    context = {'form': form, 'company_type_display': 'Fabrika', 'page_title': "Yeni Fabrika Kullanıcısı Ekle"}
+    return render(request, 'ana_uygulama/company_user_form.html', context)
+
+# Fabrika - Kullanıcı Güncelleme
+@login_required
+def company_user_update_fabrika_view(request, pk):
+    """
+    Fabrika firma yöneticisinin şirketlerindeki mevcut kullanıcıları güncellemesi için görünüm.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+    user_to_update = get_object_or_404(CustomUser, pk=pk, company=request.user.company)
+    if request.method == 'POST':
+        form = CompanyUserCreationForm(request.POST, instance=user_to_update)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Kullanıcı {user_to_update.username} bilgileri başarıyla güncellendi.")
+            return redirect('ana_uygulama:company_user_list_fabrika_view')
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = CompanyUserCreationForm(instance=user_to_update)
+    context = {'form': form, 'page_title': "Şirket Kullanıcısını Güncelle"}
+    return render(request, 'ana_uygulama/company_user_form.html', context)
+
+
+# Fabrika - Kullanıcı Silme
+@login_required
+def company_user_delete_fabrika_view(request, pk):
+    """
+    Fabrika firma yöneticisinin şirketlerinden kullanıcıları silmesi için görünüm.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+    user_to_delete = get_object_or_404(CustomUser, pk=pk, company=request.user.company)
+    if request.method == 'POST':
+        user_to_delete.delete()
+        messages.success(request, f"Kullanıcı {user_to_delete.username} başarıyla silindi.")
+        return redirect('ana_uygulama:company_user_list_fabrika_view')
+    context = {'user_to_delete': user_to_delete, 'page_title': "Şirket Kullanıcısını Sil"}
+    return render(request, 'ana_uygulama/company_user_confirm_delete.html', context)
+
+# Fabrika - Şirket Listeleme (Diğer Firmaları Görüntüleme)
+@login_required
+def company_list_for_fabrika_view(request):
+    """
+    Fabrika rolü için sistemdeki diğer firmaları listeleme görünümü.
+    Tedarikçileri ve diğer Fabrikaları ayrı ayrı gösterir.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+
+    shipper_company_filter = request.GET.get('shipper_company', '').strip()
+    factory_company_filter = request.GET.get('factory_company', '').strip()
+
+    shippers = Company.objects.filter(company_type='NAKLIYECI').order_by('name')
+    if shipper_company_filter:
+        shippers = shippers.filter(name__icontains=shipper_company_filter)
+
+    factories = Company.objects.filter(company_type='FABRIKA').order_by('name')
+    if factory_company_filter:
+        factories = factories.filter(name__icontains=factory_company_filter)
+
+    # Exclude the user's own company from the factory list
+    if request.user.company and request.user.company.company_type == 'FABRIKA':
+        factories = factories.exclude(pk=request.user.company.pk)
+
+    context = {
+        'shippers': shippers,
+        'factories': factories,
+        'page_title': "Sistemdeki Firmalar",
+        'shipper_company_filter_value': shipper_company_filter,
+        'factory_company_filter_value': factory_company_filter,
+    }
+    return render(request, 'ana_uygulama/fabrika/company_list.html', context)
+
+# Fabrika - Yeni Tedarikçi Oluştur
+@login_required
+def shipper_create_by_fabrika_view(request):
+    """
+    Fabrika rolü kullanıcısının yeni bir tedarikçi (nakliyeci) firması ekleme görünümü.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Sadece fabrika firmaları yeni tedarikçi ekleyebilir.")
+        return redirect('ana_uygulama:dashboard')
+
+    if request.method == 'POST':
+        form = CarrierForm(request.POST) # Using CarrierForm, but setting company_type to 'NAKLIYECI'
+        if form.is_valid():
+            shipper_company = form.save(commit=False)
+            shipper_company.company_type = 'NAKLIYECI'
+            try:
+                shipper_company.save()
+                messages.success(request, f"Nakliyeci '{shipper_company.full_name}' başarıyla eklendi.")
+                return redirect('ana_uygulama:company_list_for_fabrika_view')
+            except Exception as e:
+                messages.error(request, f"Nakliyeci eklenirken bir hata oluştu: {e}")
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = CarrierForm() # Using CarrierForm
+
+    context = {
+        'form': form,
+        'page_title': "Yeni Nakliyeci Ekle"
+    }
+    return render(request, 'ana_uygulama/fabrika/shipper_create_form.html', context)
+
+
+# --- Fabrika - Ödemeler ---
+@login_required
+def payment_list_fabrika_view(request):
+    """
+    Fabrika için tüm ödeme kayıtlarını listeler.
+    Fabrika sadece OUTGOING (giden) ödemelerini görmeli.
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+
+    payments = Payment.objects.filter(
+        recorded_by_user__company=request.user.company,
+        direction='OUTGOING' # Fabrika sadece giden ödemelerini görmeli
+    ).order_by('-payment_date')
+    context = {'payments': payments, 'page_title': "Ödemelerim"}
+    return render(request, 'ana_uygulama/fabrika/payment_list.html', context)
+
+@login_required
+def payment_create_fabrika_view(request):
+    """
+    Fabrikanın yeni bir ödeme kaydı oluşturmasını sağlar (outgoing).
+    """
+    if not request.user.company or request.user.company.company_type != 'FABRIKA':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+
+    if request.method == 'POST':
+        form = PaymentForm(request.POST, request_user=request.user) # user'ı forma ilettik
+        if form.is_valid():
+            payment = form.save(commit=False)
+            payment.recorded_by_user = request.user # Kaydı oluşturan kullanıcı
+            payment.direction = 'OUTGOING' # Fabrika için varsayılan olarak 'Giden'
+            payment.save()
+            messages.success(request, "Ödeme kaydı başarıyla oluşturuldu.")
+            return redirect('ana_uygulama:payment_list_fabrika_view')
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = PaymentForm(request_user=request.user) # user'ı forma ilettik
+    context = {'form': form, 'page_title': "Yeni Ödeme Kaydı Oluştur"}
+    return render(request, 'ana_uygulama/fabrika/payment_form.html', context)
+
+@login_required
+def payment_detail_fabrika_view(request, pk):
+    """
+    Fabrika için belirli bir ödeme kaydının detaylarını görüntüler.
+    """
+    payment = get_object_or_404(Payment, pk=pk, recorded_by_user__company=request.user.company, direction='OUTGOING')
+    context = {'payment': payment, 'page_title': f"Ödeme Detayı - {payment.pk}"}
+    return render(request, 'ana_uygulama/fabrika/payment_detail.html', context)
+
+
+@login_required
+def payment_update_fabrika_view(request, pk):
+    """
+    Fabrikanın mevcut bir ödeme kaydını güncellemesini sağlar.
+    """
+    payment = get_object_or_404(Payment, pk=pk, recorded_by_user__company=request.user.company, direction='OUTGOING')
+    if request.method == 'POST':
+        form = PaymentForm(request.POST, instance=payment, request_user=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Ödeme kaydı başarıyla güncellendi.")
+            return redirect('ana_uygulama:payment_list_fabrika_view')
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = PaymentForm(instance=payment, request_user=request.user)
+    context = {'form': form, 'page_title': "Ödeme Kaydını Güncelle"}
+    return render(request, 'ana_uygulama/fabrika/payment_form.html', context)
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def bank_account_list_nakliyeci_view(request):
+    """
+    Nakliyeci rolündeki kullanıcının kendi şirketine ait banka hesaplarını listeler.
+    """
+    # Sadece oturum açmış kullanıcının şirketine ait banka hesaplarını filtrele
+    bank_accounts = BankAccount.objects.filter(carrier__managed_by_shipper=request.user.company).order_by('-created_at')
+    context = {
+        'bank_accounts': bank_accounts,
+        'page_title': "Banka Hesaplarım"
+    }
+    # Not: Bu şablon yolu sizin projenizdeki gerçek şablon yoluna göre ayarlanmalıdır.
+    # Örneğin, ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_list.html
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_list.html', context)
+
+@login_required
+def payment_delete_fabrika_view(request, pk):
+    """
+    Fabrikanın bir ödeme kaydını silmesini sağlar.
+    """
+    payment = get_object_or_404(Payment, pk=pk, recorded_by_user__company=request.user.company, direction='OUTGOING')
+    if request.method == 'POST':
+        payment.delete()
+        messages.success(request, "Ödeme kaydı başarıyla silindi.")
+        return redirect('ana_uygulama:payment_list_fabrika_view')
+    context = {'payment': payment, 'page_title': "Ödeme Kaydını Sil"}
+    return render(request, 'ana_uygulama/confirm_delete.html', context)
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def bank_account_create_nakliyeci_view(request):
+    """
+    Nakliyeci rolündeki kullanıcının kendi şirketi için yeni bir banka hesabı oluşturmasını sağlar.
+    """
+    if request.method == 'POST':
+        form = BankAccountForm(request.POST) # request_user'ı burada geçirmeye gerek yok
+        if form.is_valid():
+            bank_account = form.save(commit=False)
+            # BankAccount modelinde 'company' alanı yok, bu yüzden carrier üzerinden atamalıyız
+            # Formdan carrier seçildiğini varsayıyorum, aksi takdirde burası değişmeli
+            # Eğer BankAccount doğrudan Company'ye bağlı olacaksa models.py'yi düzeltmeliyiz.
+            # Şu anki models.py'ye göre BankAccount, Carrier'a bağlı.
+            # Dolayısıyla, banka hesabı oluşturulurken hangi taşıyıcıya ait olduğu belirtilmelidir.
+            # Bu fonksiyon 'nakliyeci/banka-hesaplari/yeni/' URL'si ile çalışıyor ve bir carrier_id almadığı için
+            # doğrudan Nakliyeci şirketinin banka hesabı olarak değil, onun yönettiği taşıyıcının banka hesabı olarak düşünülmeli.
+            # Eğer Nakliyeci'nin kendi şirketinin banka hesabı olacaksa models.py'ye Company'ye ForeignKey eklenmeli.
+            # Varsayım: Bu form, Nakliyeci'nin kendi şirketi için genel bir banka hesabı eklemesidir.
+            # Eğer bu BankAccount, doğrudan Nakliyeci firmasına ait olacaksa, Model.py'de `company = models.ForeignKey(Company...)` eklenmeli.
+            # Şu anki models.py'ye göre bu mümkün değil.
+            messages.error(request, "Banka hesabı doğrudan nakliyeci firmaya atanamaz. Lütfen bir taşıyıcıya atayın.")
+            return redirect('ana_uygulama:bank_account_list_nakliyeci_view') # Hata ile geri yönlendir
+
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = BankAccountForm() # GET isteği için formu hazırla
+    context = {'form': form, 'page_title': "Yeni Banka Hesabı Oluştur"}
+    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_form.html
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_form.html', context)
+
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def bank_account_detail_nakliyeci_view(request, pk):
+    """
+    Nakliyeci rolündeki kullanıcının kendi şirketine ait belirli bir banka hesabının detaylarını görüntüler.
+    """
+    # Sadece kullanıcının şirketi tarafından yönetilen taşıyıcılara ait banka hesaplarını getir
+    bank_account = get_object_or_404(BankAccount, pk=pk, carrier__managed_by_shipper=request.user.company)
+    context = {
+        'bank_account': bank_account,
+        'page_title': "Banka Hesabı Detayları"
+    }
+    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_detail.html
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_detail.html', context)
+
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def bank_account_update_nakliyeci_view(request, pk):
+    """
+    Nakliyeci rolündeki kullanıcının kendi şirketine ait mevcut bir banka hesabını günceller.
+    """
+    bank_account = get_object_or_404(BankAccount, pk=pk, carrier__managed_by_shipper=request.user.company)
+    if request.method == 'POST':
+        form = BankAccountForm(request.POST, instance=bank_account) # request_user'ı burada geçirmeye gerek yok
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Banka hesabı başarıyla güncellendi.")
+            return redirect('ana_uygulama:bank_account_list_nakliyeci_view') # Liste sayfasına yönlendir
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = BankAccountForm(instance=bank_account)
+    context = {'form': form, 'page_title': "Banka Hesabını Güncelle"}
+    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_form.html (oluşturma formu ile aynı olabilir)
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_form.html', context)
+
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def bank_account_delete_nakliyeci_view(request, pk):
+    """
+    Nakliyeci rolündeki kullanıcının kendi şirketine ait bir banka hesabını silmesini sağlar.
+    """
+    bank_account = get_object_or_404(BankAccount, pk=pk, carrier__managed_by_shipper=request.user.company)
+    if request.method == 'POST':
+        bank_account.delete()
+        messages.success(request, "Banka hesabı başarıyla silindi.")
+        return redirect('ana_uygulama:bank_account_list_nakliyeci_view') # Liste sayfasına yönlendir
+    context = {
+        'bank_account': bank_account,
+        'page_title': "Banka Hesabını Sil",
+        'object_name': bank_account.bank_name # Silinecek objenin adını şablonda kullanmak için
+    }
+    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_confirm_delete.html
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_confirm_delete.html', context)
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def company_list_for_nakliyeci_view(request):
+    """
+    Nakliyeci rolündeki kullanıcının çalışabileceği aktif Fabrika firmalarını listeler.
+    """
+    # Sadece aktif ve 'FABRIKA' tipindeki firmaları listele
+    factories = Company.objects.filter(company_type='FABRIKA', is_active=True).order_by('name')
+    context = {
+        'companies': factories,
+        'page_title': "Çalıştığım/Potansiyel Fabrikalar"
+    }
+    # Not: Bu şablon yolu sizin projenizdeki gerçek şablon yoluna göre ayarlanmalıdır.
+    # Örneğin, ana_uygulama/templates/ana_uygulama/nakliyeci/company_list.html
+    return render(request, 'ana_uygulama/nakliyeci/company_list.html', context)
