@@ -9,16 +9,13 @@ from django.utils import timezone
 from datetime import date, timedelta
 from django.db.models import Q
 
-# CustomUser için formlar
-
-
-
+# CustomUser forms
 class CustomUserCreationForm(UserCreationForm):
     """
     Form for creating a new CustomUser.
     Can be used for admin panel or adding company users.
     """
-    email = forms.EmailField(required=True, label="E-posta") # Email'i zorunlu hale getirdik
+    email = forms.EmailField(required=True, label="E-posta") # Email made mandatory
 
     class Meta(UserCreationForm.Meta):
         model = CustomUser
@@ -47,14 +44,13 @@ class CustomUserChangeForm(UserChangeForm):
             'company': 'Firma',
         }
 
-
-# Şirket kullanıcısı oluşturmak için form (CompanyUserCreationForm)
+# Company user creation form
 class CompanyUserCreationForm(UserCreationForm):
     """
     Form for creating a new user belonging to a company (CustomUser).
     Used when adding users to an existing company.
     """
-    email = forms.EmailField(required=True, label="E-posta") # Email'i zorunlu hale getirdik
+    email = forms.EmailField(required=True, label="E-posta") # Email made mandatory
 
     class Meta(UserCreationForm.Meta):
         model = CustomUser
@@ -67,8 +63,7 @@ class CompanyUserCreationForm(UserCreationForm):
             'company': 'Firma',
         }
 
-
-# Company için form
+# Company form
 class CompanyForm(forms.ModelForm):
     """
     Form for creating and updating Company instances.
@@ -94,10 +89,10 @@ class CompanyForm(forms.ModelForm):
             'tax_id_number': 'Vergi Numarası',
         }
 
-# Fabrika tarafından Nakliyeci eklemek için basitleştirilmiş form
+# Simplified form for adding Shipper by Factory
 class CarrierForm(forms.ModelForm):
     """
-    Form for Carriers (Taşıyıcılar), used by Shipper companies.
+    Form for Carriers, used by Shipper companies.
     Can also be used by Factories to add new Shipper (Nakliyeci) companies.
     """
     class Meta:
@@ -117,7 +112,6 @@ class CarrierForm(forms.ModelForm):
             'tax_id_number': 'Vergi Numarası/TC Kimlik No',
             'address': 'Adres',
         }
-
 
 class FactoryCreationByShipperForm(forms.ModelForm):
     """
@@ -150,7 +144,7 @@ class FactoryCreationByShipperForm(forms.ModelForm):
         return instance
 
 
-# Araç Formu
+# Vehicle Form
 class VehicleForm(forms.ModelForm):
     """
     Form for creating and updating Vehicle instances.
@@ -159,48 +153,57 @@ class VehicleForm(forms.ModelForm):
     class Meta:
         model = Vehicle
         fields = [
-            'carrier', 'plate_number', 'vehicle_type', 'capacity_ton',
+            'carrier', 'plate_number', 'vehicle_type', 'capacity_ton', 'capacity_m3',
             'inspection_expiry_date', 'insurance_expiry_date',
-            'driver_name', 'driver_phone', 'license_plate_image'
+            'driver_name', 'driver_phone', 'license_plate_image', 'vehicle_license_image',
+            'insurance_document', 'inspection_document'
         ]
         widgets = {
-            'carrier': forms.Select(attrs={'class': 'form-select select2-enable'}), # Select2 için class eklendi
+            'carrier': forms.Select(attrs={'class': 'form-select select2-enable'}), # Class added for Select2
             'plate_number': forms.TextInput(attrs={'class': 'form-control'}),
             'vehicle_type': forms.Select(attrs={'class': 'form-select'}),
             'capacity_ton': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'capacity_m3': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'inspection_expiry_date': forms.DateInput(attrs={'class': 'form-control datepicker', 'type': 'date'}),
             'insurance_expiry_date': forms.DateInput(attrs={'class': 'form-control datepicker', 'type': 'date'}),
             'driver_name': forms.TextInput(attrs={'class': 'form-control'}),
             'driver_phone': forms.TextInput(attrs={'class': 'form-control'}),
             'license_plate_image': forms.FileInput(attrs={'class': 'form-control'}),
+            'vehicle_license_image': forms.FileInput(attrs={'class': 'form-control'}),
+            'insurance_document': forms.FileInput(attrs={'class': 'form-control'}),
+            'inspection_document': forms.FileInput(attrs={'class': 'form-control'}),
         }
         labels = {
             'carrier': 'Taşıyıcı (Araç Sahibi)',
             'plate_number': 'Plaka Numarası',
             'vehicle_type': 'Araç Tipi',
             'capacity_ton': 'Kapasite (Ton)',
+            'capacity_m3': 'Kapasite (m³)',
             'inspection_expiry_date': 'Muayene Bitiş Tarihi',
             'insurance_expiry_date': 'Sigorta Bitiş Tarihi',
             'driver_name': 'Sürücü Adı Soyadı',
             'driver_phone': 'Sürücü Telefonu',
             'license_plate_image': 'Plaka Görseli',
+            'vehicle_license_image': 'Araç Ruhsat Görseli',
+            'insurance_document': 'Sigorta Poliçesi',
+            'inspection_document': 'Muayene Belgesi',
         }
 
     def __init__(self, *args, **kwargs):
         request_user_company = kwargs.pop('request_user_company', None)
         super().__init__(*args, **kwargs)
         if request_user_company:
-            # Sadece mevcut nakliyeci firmasının yönettiği taşıyıcıları listele
+            # List only carriers managed by the current shipper company
             self.fields['carrier'].queryset = Carrier.objects.filter(managed_by_shipper=request_user_company)
         else:
-            # Eğer request_user_company yoksa (örn: admin paneli), tüm taşıyıcıları göster
+            # If no request_user_company (e.g., admin panel), show all carriers
             self.fields['carrier'].queryset = Carrier.objects.all()
 
-        # Boş seçenek için placeholder
+        # Placeholder for empty selection
         self.fields['carrier'].empty_label = "Bir Taşıyıcı Seçin"
 
 
-# Teklif Talebi Formu
+# Quote Request Form
 class QuoteRequestForm(forms.ModelForm):
     """
     Form for creating and updating QuoteRequest instances.
@@ -251,7 +254,7 @@ class QuoteRequestForm(forms.ModelForm):
         return cleaned_data
 
 
-# Teklif Verme Formu (Nakliyecinin fiyat teklifi sunması için)
+# Offer Price Form (for Shipper to submit a price quote)
 class OfferPriceForm(forms.ModelForm):
     """
     Form for Shipper to offer a price for a QuoteRequest.
@@ -274,14 +277,14 @@ class OfferPriceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Eğer instance varsa, mevcut fiyat ve notları formda göster
+        # If instance exists, show existing price and notes in the form
         if self.instance and self.instance.offered_price is not None:
             self.fields['offered_price'].initial = self.instance.offered_price
         if self.instance and self.instance.shipper_notes is not None:
             self.fields['shipper_notes'].initial = self.instance.shipper_notes
 
 
-# Sevkiyat Formu (Nakliyeci için)
+# Shipment Form (for Shipper)
 class ShipmentFormNakliyeci(forms.ModelForm):
     """
     Form for creating and updating Shipment instances by Shipper companies.
@@ -318,18 +321,18 @@ class ShipmentFormNakliyeci(forms.ModelForm):
         request_user_company = kwargs.pop('request_user_company', None)
         super().__init__(*args, **kwargs)
         if request_user_company:
-            # Sadece nakliyecinin yönettiği (kendi eklediği) fabrikaları göster
+            # Show only factories managed by the shipper (or added by them)
             self.fields['factory'].queryset = Company.objects.filter(
                 company_type='FABRIKA' # Assuming factories are added by shippers or superuser
             ).order_by('name')
 
-            # Sadece nakliyecinin yönettiği taşıyıcılara ait araçları göster
+            # Show only vehicles belonging to carriers managed by the shipper
             self.fields['assigned_vehicle'].queryset = Vehicle.objects.filter(
                 carrier__managed_by_shipper=request_user_company
             ).order_by('plate_number')
             self.fields['assigned_vehicle'].required = False # Make it optional if not already
 
-        # Varsayılan olarak boş seçeneği ekle
+        # Add empty label by default
         self.fields['factory'].empty_label = "Müşteri Fabrika Seçin"
         self.fields['assigned_vehicle'].empty_label = "Bir Araç Seçin (Opsiyonel)"
 
@@ -339,14 +342,14 @@ class ShipmentFormNakliyeci(forms.ModelForm):
         delivery_date = cleaned_data.get('delivery_date')
 
         if pickup_date and pickup_date < timezone.now().date():
-            # Sadece yeni kayıtlar için geçmiş tarih kontrolü
+            # Only for new records, check past date
             if not self.instance or not self.instance.pk:
                 self.add_error('pickup_date', "Yükleme tarihi bugünden eski olamaz.")
 
         if delivery_date and pickup_date and delivery_date < pickup_date:
             self.add_error('delivery_date', "Teslimat tarihi, yükleme tarihinden önce olamaz.")
 
-        # Fiyat kontrolü
+        # Price check
         price = cleaned_data.get('price_for_factory')
         if price is not None and price <= 0:
             self.add_error('price_for_factory', "Sevkiyat fiyatı sıfırdan büyük olmalıdır.")
@@ -354,7 +357,7 @@ class ShipmentFormNakliyeci(forms.ModelForm):
         return cleaned_data
 
 
-# Sevkiyat Durum Güncelleme Formu (Nakliyeci için)
+# Shipment Status Update Form (for Shipper)
 class ShipmentStatusUpdateForm(forms.ModelForm):
     """
     Form for updating only the status of a Shipment.
@@ -373,50 +376,50 @@ class ShipmentStatusUpdateForm(forms.ModelForm):
         new_status = self.cleaned_data['status']
         current_status = self.instance.status
 
-        # Durum geçiş kuralları
+        # Status transition rules
         status_transitions = {
             'PENDING_ASSIGNMENT': ['ASSIGNED', 'CANCELLED'],
-            'ASSIGNED': ['IN_TRANSIT', 'PENDING_ASSIGNMENT', 'CANCELLED'], # PENDING_ASSIGNMENT'a geri dönebilmeli
+            'ASSIGNED': ['IN_TRANSIT', 'PENDING_ASSIGNMENT', 'CANCELLED'], # Can revert to PENDING_ASSIGNMENT
             'IN_TRANSIT': ['DELIVERED', 'CANCELLED'],
             'DELIVERED': ['BILLED'],
-            'BILLED': [], # Faturalandırıldıktan sonra durum değiştirilemez
-            'CANCELLED': [], # İptal edildikten sonra durum değiştirilemez
-            'COMPLETED': [], # Tamamlandıktan sonra durum değiştirilemez (Teklif kabulünden sonra oluşan nihai durum)
+            'BILLED': [], # Cannot change status after billing
+            'CANCELLED': [], # Cannot change status after cancellation
+            'COMPLETED': [], # Final status after quote acceptance
         }
 
         if new_status not in status_transitions.get(current_status, []):
             if current_status == new_status:
-                pass # Aynı duruma geçişe izin ver
+                pass # Allow transition to the same status
             elif new_status == 'CANCELLED' and current_status not in ['BILLED', 'COMPLETED']:
-                pass # Herhangi bir durumdan iptal edilebilir (fatura kesilmediyse veya tamamlanmadıysa)
+                pass # Can be cancelled from any status (if not billed or completed)
             else:
                 raise ValidationError(
                     f"'{dict(self.instance.STATUS_CHOICES).get(current_status)}' durumundan "
                     f"'{dict(self.instance.STATUS_CHOICES).get(new_status)}' durumuna geçişe izin verilmiyor."
                 )
 
-        # Teslimat tarihi kontrolü: Eğer durum "TESLİM EDİLDİ" ise teslimat tarihi olmalı
+        # Delivery date check: If status is "DELIVERED", delivery date must be present
         if new_status == 'DELIVERED' and not self.instance.delivery_date:
-            self.instance.delivery_date = timezone.now().date() # Otomatik olarak bugün ayarla
+            self.instance.delivery_date = timezone.now().date() # Auto-set to today
             # raise ValidationError("Sevkiyat durumu 'Teslim Edildi' olarak ayarlandığında teslimat tarihi belirtilmelidir.")
 
-        # Faturalandırma durumu kontrolü
+        # Billing status check
         if new_status == 'BILLED' and current_status != 'DELIVERED':
             raise ValidationError("Sadece 'Teslim Edildi' durumundaki sevkiyatlar 'Faturalandırıldı' olarak işaretlenebilir.")
 
         return new_status
 
 
-# Araç Atama Formu
+# Assign Vehicle Form
 class AssignVehicleForm(forms.ModelForm):
     """
     Form for assigning a vehicle to a shipment.
     Filters vehicles based on the current user's shipper company.
     """
     assigned_vehicle = forms.ModelChoiceField(
-        queryset=Vehicle.objects.none(), # Başlangıçta boş, __init__ içinde doldurulacak
+        queryset=Vehicle.objects.none(), # Empty initially, populated in __init__
         label="Atanacak Araç",
-        required=False, # Boşa alma işlemi için gerekli
+        required=False, # Required for unassignment operation
         widget=forms.Select(attrs={'class': 'form-select select2-enable', 'data-placeholder': "Bir araç seçin..."})
     )
 
@@ -432,28 +435,28 @@ class AssignVehicleForm(forms.ModelForm):
                 carrier__managed_by_shipper=request_user_company
             ).order_by('plate_number')
         else:
-            # Eğer nakliyeci firması yoksa veya tip nakliyeci değilse boş queryset
+            # If no shipper company or not a shipper type, empty queryset
             self.fields['assigned_vehicle'].queryset = Vehicle.objects.none()
 
 
-# Fatura Formu
+# Invoice Form
 class InvoiceForm(forms.ModelForm):
     """
     Form for creating and updating Invoice instances.
     Calculates total amount based on amount and vat_rate.
     """
-    # Mevcut miktar alanı yerine, net_amount ve KDV oranını alıp total_amount'ı hesaplayalım.
-    # Bu form sevkiyat fiyatını esas alacağı için 'amount' alanını doğrudan göstermiyoruz.
-    # Ancak Django form validasyonu için 'amount' alanının olması gerekiyor,
-    # bu yüzden form içinde gizli bir alan olarak tutabilir veya field listesinden çıkarabiliriz.
-    # Modeli kaydederken 'shipment.price_for_factory' değerini 'amount' alanına atayacağız.
+    # Instead of an existing amount field, we will take net_amount and VAT rate to calculate total_amount.
+    # This form will be based on shipment price, so we don't directly display the 'amount' field.
+    # However, for Django form validation, the 'amount' field needs to be present,
+    # so we can keep it as a hidden field in the form or remove it from the field list.
+    # When saving the model, we will assign 'shipment.price_for_factory' to the 'amount' field.
 
     vat_rate = forms.DecimalField(
         max_digits=5, decimal_places=2,
         label="KDV Oranı (%)",
         min_value=Decimal('0.00'),
         max_value=Decimal('100.00'),
-        initial=Decimal('18.00'), # Varsayılan KDV oranı
+        initial=Decimal('18.00'), # Default VAT rate
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'})
     )
 
@@ -484,7 +487,7 @@ class InvoiceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # amount alanı hidden olduğu için varsayılan bir değer atanabilir
+        # If the amount field is hidden, a default value can be assigned
         if self.instance and self.instance.shipment and self.instance.shipment.price_for_factory:
             self.fields['amount'].initial = self.instance.shipment.price_for_factory
         elif self.instance and self.instance.amount is not None:
@@ -501,19 +504,19 @@ class InvoiceForm(forms.ModelForm):
         if due_date and issue_date and due_date < issue_date:
             self.add_error('due_date', "Vade tarihi, fatura tarihinden önce olamaz.")
 
-        # amount'ı burada zorunlu kılabiliriz, çünkü gizli olsa da gerekli
+        # 'amount' can be made mandatory here, even if it's hidden
         amount = cleaned_data.get('amount')
         if amount is None or amount <= 0:
-            # Bu hata kullanıcının görmesi için değil, developer için.
-            # amount hidden olduğu için kullanıcı direkt bu hatayı göremez.
-            # Sevkiyat fiyatı kontrolü view'de yapılmalı.
+            # This error is for the developer, not directly for the user.
+            # Since 'amount' is hidden, the user won't directly see this error.
+            # Shipment price control should be done in the view.
             if not self.instance or self.instance.shipment is None or self.instance.shipment.price_for_factory is None:
                 raise ValidationError("Fatura tutarı belirtilmelidir veya ilişkili sevkiyatın fiyatı olmalıdır.")
 
         return cleaned_data
 
 
-# Banka Hesabı Formu
+# Bank Account Form
 class BankAccountForm(forms.ModelForm):
     """
     Form for creating and updating BankAccount instances.
@@ -521,23 +524,27 @@ class BankAccountForm(forms.ModelForm):
     class Meta:
         model = BankAccount
         fields = [
-            'bank_name', 'iban'
+            'bank_name', 'iban', 'account_owner_name', 'is_primary'
         ]
         widgets = {
             'bank_name': forms.TextInput(attrs={'class': 'form-control'}),
             'iban': forms.TextInput(attrs={'class': 'form-control'}),
+            'account_owner_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_primary': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         labels = {
             'bank_name': 'Banka Adı',
             'iban': 'IBAN',
+            'account_owner_name': 'Hesap Sahibi Adı',
+            'is_primary': 'Birincil Hesap mı?',
         }
 
     def __init__(self, *args, **kwargs):
         carrier_instance = kwargs.pop('carrier_instance', None)
         super().__init__(*args, **kwargs)
-        # Eğer bir taşıyıcı instance'ı sağlanırsa, formdaki alanları buna göre kısıtlayabilirsiniz
-        # Şu an için özel bir kısıtlama yok, sadece carrier_instance'ı alıyoruz.
-        # Gerekirse burada alanları özelleştirebilirsiniz.
+        # If a carrier instance is provided, you can restrict fields accordingly
+        # Currently, there are no specific restrictions, we just take the carrier_instance.
+        # You can customize fields here if needed.
 
 class PaymentForm(forms.ModelForm):
     """
@@ -578,11 +585,11 @@ class PaymentForm(forms.ModelForm):
         if request_user and request_user.company:
             user_company = request_user.company
 
-            # Fatura filtreleme: Sadece ilgili nakliyeci veya fabrika şirketine ait faturalar
+            # Invoice filtering: Only invoices belonging to the relevant shipper or factory company
             if user_company.company_type == 'NAKLIYECI':
                 self.fields['invoice'].queryset = Invoice.objects.filter(issued_by_shipper=user_company).order_by('-issue_date')
                 self.fields['shipment'].queryset = Shipment.objects.filter(shipper_company=user_company).order_by('-pickup_date')
-                # Karşı taraf olarak fabrikaları ve kendi dışındaki nakliyecileri listele
+                # List factories and other shippers as counterparties
                 self.fields['counterparty_company'].queryset = Company.objects.filter(
                     Q(company_type='FABRIKA') | (Q(company_type='NAKLIYECI') & ~Q(pk=user_company.pk))
                 ).order_by('name')
@@ -590,32 +597,31 @@ class PaymentForm(forms.ModelForm):
             elif user_company.company_type == 'FABRIKA':
                 self.fields['invoice'].queryset = Invoice.objects.filter(billed_to_factory=user_company).order_by('-issue_date')
                 self.fields['shipment'].queryset = Shipment.objects.filter(factory=user_company).order_by('-pickup_date')
-                # Karşı taraf olarak nakliyecileri ve kendi dışındaki fabrikaları listele
+                # List shippers and other factories as counterparties
                 self.fields['counterparty_company'].queryset = Company.objects.filter(
                     Q(company_type='NAKLIYECI') | (Q(company_type='FABRIKA') & ~Q(pk=user_company.pk))
                 ).order_by('name')
             else:
-                # Diğer durumlar (örneğin superuser veya company atanmamış kullanıcılar) için tümünü göster
+                # For other cases (e.g., superuser or unassigned users), show all
                 self.fields['invoice'].queryset = Invoice.objects.all().order_by('-issue_date')
                 self.fields['shipment'].queryset = Shipment.objects.all().order_by('-pickup_date')
                 self.fields['counterparty_company'].queryset = Company.objects.all().order_by('name')
 
         else:
-            # Eğer request_user veya company yoksa (örn: test ortamı, veya anonim kullanıcı)
-            # Queryset'leri boş bırakmak veya tümünü göstermek mantıklı olabilir.
-            # Güvenlik nedeniyle boş bırakmak daha iyi.
+            # If no request_user or company (e.g., test environment, or anonymous user)
+            # It might be better to leave Querysets empty for security.
             self.fields['invoice'].queryset = Invoice.objects.none()
             self.fields['shipment'].queryset = Shipment.objects.none()
             self.fields['counterparty_company'].queryset = Company.objects.none()
 
-        # Boş seçenek için placeholder
+        # Placeholder for empty selection
         self.fields['invoice'].empty_label = "Fatura Seçin (Opsiyonel)"
         self.fields['shipment'].empty_label = "Sevkiyat Seçin (Opsiyonel)"
         self.fields['counterparty_company'].empty_label = "Firma Seçin (Opsiyonel)"
 
-        # Eğer düzenleme modundaysak ve bazı alanlar zaten doluysa,
-        # boş seçenekleri kaldırmak veya disable etmek isteyebilirsiniz.
-        # Bu kısımlar, mevcut veriye göre form davranışını ayarlamak için daha fazla mantık gerektirebilir.
+        # If in edit mode and some fields are already populated,
+        # you might want to remove or disable empty options.
+        # These parts might require more logic to adjust form behavior based on existing data.
         if self.instance.pk:
             if self.instance.invoice:
                 self.fields['shipment'].queryset = Shipment.objects.filter(pk=self.instance.shipment.pk if self.instance.shipment else None)
@@ -635,7 +641,7 @@ class PaymentForm(forms.ModelForm):
                 self.fields['shipment'].queryset = Shipment.objects.filter(pk=self.instance.shipment.pk if self.instance.shipment else None)
                 self.fields['shipment'].disabled = True
                 
-        # Mevcut ödeme yönüne göre diğer alanları kısıtla
+        # Restrict other fields based on current payment direction
         direction = self.initial.get('direction') or self.data.get('direction')
         if direction == 'INCOMING':
             self.fields['invoice'].label = "İlişkili Fatura (Tahsilat Faturası)"
@@ -644,7 +650,7 @@ class PaymentForm(forms.ModelForm):
             self.fields['invoice'].label = "İlişkili Fatura (Ödeme Faturası)"
             self.fields['shipment'].label = "İlişkili Sevkiyat (Ödeme Sevkiyatı)"
 
-        # 'recorded_by_user' alanını formda göstermemek için kaldırıyoruz
+        # Remove 'recorded_by_user' field from the form
         if 'recorded_by_user' in self.fields:
             del self.fields['recorded_by_user']
 
@@ -656,44 +662,44 @@ class PaymentForm(forms.ModelForm):
         counterparty_company = cleaned_data.get('counterparty_company')
         counterparty_name = cleaned_data.get('counterparty_name')
 
-        # Kayıtın en az bir ilişkiye sahip olması gerektiği kuralı
+        # Rule that record must have at least one association
         if not invoice and not shipment and not (counterparty_company or counterparty_name):
             raise ValidationError(
                 "Bir ödeme/tahsilat kaydı ya bir faturaya, ya bir sevkiyata ya da bir karşı tarafa (firma/adı) bağlı olmalıdır."
             )
         
-        # Karşı taraf ve fatura tutarlılığı kontrolleri
+        # Counterparty and invoice consistency checks
         if invoice:
-            # Fatura varsa, karşı taraf firmanın faturadaki firma ile eşleştiğinden emin ol
-            if direction == 'INCOMING': # Tahsilat ise
+            # If there's an invoice, ensure the counterparty company matches the one on the invoice
+            if direction == 'INCOMING': # If it's a collection
                 if invoice.billed_to_factory != counterparty_company:
                     self.add_error('counterparty_company', "Tahsilat faturadaki faturalanan fabrika ile eşleşmelidir.")
                 if invoice.total_amount != cleaned_data.get('amount'):
                     self.add_error('amount', "Tahsilat tutarı fatura toplam tutarına eşit olmalıdır.")
-            elif direction == 'OUTGOING': # Ödeme ise
-                if invoice.issued_by_shipper != self.instance.shipper_company: # Kendi şirketimiz, faturayı kesen taraf değilse
-                    if invoice.issued_by_shipper != counterparty_company: # Ödeme yapılıyorsa ve fatura bizim şirketimiz tarafından kesilmediyse
+            elif direction == 'OUTGOING': # If it's a payment
+                if invoice.issued_by_shipper != self.instance.shipper_company: # If it's not our company, if it's the billing party
+                    if invoice.issued_by_shipper != counterparty_company: # If payment is made and invoice is not issued by our company
                         self.add_error('counterparty_company', "Ödeme, faturayı kesen nakliyeci firma ile eşleşmelidir.")
                 if invoice.total_amount != cleaned_data.get('amount'):
                     self.add_error('amount', "Ödeme tutarı fatura toplam tutarına eşit olmalıdır.")
 
-        # Sevkiyat varsa ve karşı taraf firması seçilmişse tutarlılık kontrolü
+        # Consistency check if shipment exists and counterparty company is selected
         if shipment and counterparty_company:
             if direction == 'INCOMING' and shipment.factory != counterparty_company:
                 self.add_error('counterparty_company', "Tahsilat sevkiyattaki fabrika ile eşleşmelidir.")
             elif direction == 'OUTGOING' and shipment.shipper_company != counterparty_company:
-                # Bu kısım sadece taşıyıcılara yapılan ödemeler için geçerli,
-                # bu durumda counterparty_company yerine Carrier seçilmelidir.
-                # Mevcut model yapısında Shipment'ın counterparty'si Shipper'ın kendisi olur,
-                # bu yüzden buradaki logic biraz karmaşıklaşabilir.
-                pass # Şimdilik bu kontrolü atlıyoruz veya daha spesifik bir logic yazılabilir.
+                # This part is only valid for payments made to carriers,
+                # in this case Carrier should be selected instead of counterparty_company.
+                # In the current model structure, the shipment's counterparty is the Shipper itself,
+                # so the logic here might become a bit complex.
+                pass # For now, we skip this check or a more specific logic can be written.
 
-        # Eğer hem counterparty_company hem de counterparty_name girilmişse
+        # If both counterparty_company and counterparty_name are entered
         if counterparty_company and counterparty_name:
             raise ValidationError("Hem 'Karşı Taraf Firma' hem de 'Karşı Taraf Adı' aynı anda girilemez. Lütfen birini seçin.")
         
-        # Eğer sadece counterparty_name girilmişse, counterparty_company boş olmalı
+        # If only counterparty_name is entered, counterparty_company must be empty
         if counterparty_name and not counterparty_company and not invoice and not shipment:
-            pass # Sadece serbest metin olarak bir karşı taraf adı girildiyse sorun yok.
+            pass # It's okay if only a free-text counterparty name is entered.
         
         return cleaned_data

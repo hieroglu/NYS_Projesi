@@ -9,17 +9,18 @@ from django.contrib.auth import logout
 from django.contrib import messages
 from django.utils import timezone
 from datetime import date, timedelta
-from django.db.models import Sum, Q, Count # Count eklendi
+from django.db.models import Sum, F, Q
 from django.urls import reverse
 from django.db.models.functions import TruncMonth # Ay bazında gruplama için
 
-# Model importları
+
+# Model imports
 from .models import (
     BankAccount, Carrier, Company, CustomUser, QuoteRequest, Shipment, Vehicle, Invoice, Payment
 )
 from decimal import Decimal
 
-# Form importları
+# Form imports
 from .forms import (
     CompanyUserCreationForm, QuoteRequestForm, VehicleForm, ShipmentFormNakliyeci,
     OfferPriceForm, AssignVehicleForm, ShipmentStatusUpdateForm, InvoiceForm,
@@ -28,31 +29,6 @@ from .forms import (
 )
 
 
-# === Yardımcı Fonksiyonlar / Decorator'lar ===
-# Kullanıcının şirket tipini kontrol eden decorator
-def user_company_type_required(company_type):
-    def decorator(view_func):
-        def wrapper(request, *args, **kwargs):
-            if not request.user.is_authenticated:
-                messages.error(request, "Bu sayfaya erişim için giriş yapmalısınız.")
-                return redirect('ana_uygulama:login')
-            if not request.user.company or request.user.company.company_type != company_type:
-                messages.error(request, "Bu sayfaya erişim yetkiniz yoktur.")
-                return redirect('ana_uygulama:dashboard')
-            return view_func(request, *args, **kwargs)
-        return wrapper
-    return decorator
-
-# Kullanıcının nakliyeci olduğunu kontrol eden decorator
-nakliyeci_required = user_company_type_required('NAKLIYECI')
-# Kullanıcının fabrika olduğunu kontrol eden decorator
-fabrika_required = user_company_type_required('FABRIKA')
-
-# === Logout View ===
-def logout_view(request):
-    logout(request)
-    messages.info(request, "Başarıyla çıkış yaptınız.")
-    return redirect(settings.LOGIN_URL)
 # === Dashboard View ===
 @login_required
 def dashboard_view(request):
@@ -63,10 +39,9 @@ def dashboard_view(request):
     user = request.user
     today = timezone.now().date()
     seven_days_later = today + timedelta(days=7)
-    thirty_days_ago = today - timedelta(days=30)
-    six_months_ago_start = (today - timedelta(days=180)).replace(day=1) # Son 6 ayın ilk günü
+    thirty_days_later = today + timedelta(days=30)
 
-    # Kullanıcının bir firmaya atanıp atanmadığını kontrol edin
+    # Check if the user is assigned to a company
     if not hasattr(user, 'company') or user.company is None:
         messages.warning(request, "Henüz bir firmaya atanmadınız. Lütfen sistem yöneticisiyle iletişime geçin.")
         context = {
@@ -76,8 +51,9 @@ def dashboard_view(request):
             'is_fabrika': False,
             'today': today,
             'page_title': 'Kontrol Paneli',
-            'aylik_is_etiketleri': json.dumps([]),
-            'aylik_is_cirolari': json.dumps([]),
+            'aylik_is_etiketleri': json.dumps([]), # Chart.js için boş başlangıç
+            'aylik_is_cirolari': json.dumps([]),   # Chart.js için boş başlangıç
+            # Dashboard.html'in beklediği diğer tüm değişkenler için varsayılan boş değerler
             'bekleyen_teklif_talepleri_sayisi': 0,
             'onay_bekleyen_teklifler_sayisi': 0,
             'toplam_aktif_is_sayisi': 0,
@@ -92,18 +68,17 @@ def dashboard_view(request):
             'vadesi_gecmis_tahsilat_sayisi': 0,
             'gonderdigim_bekleyen_talepler_sayisi': 0,
             'onayimi_bekleyen_teklifler_sayisi': 0,
-            'aktif_sevkiyatlarim_sayisi': 0,
+            'aktif_sevkiyatlarim_sayis': 0,
             'yaklasan_odeme_sayisi': 0,
             'tamamlanan_sevkiyat_bu_ay_sayisi': 0,
             'bu_ayki_toplam_fatura_tutari': Decimal('0.00'),
             'vadesi_gecmis_odeme_sayisi': 0,
-            'recent_activities': []
         }
         return render(request, 'ana_uygulama/dashboard.html', context)
 
     current_company = user.company
 
-    # Ortak bağlam verileri için varsayılanları başlatın
+    # Initialize general context data with defaults
     context = {
         'firma_adi': current_company.name,
         'kullanici_adi': user.first_name or user.username,
@@ -111,8 +86,9 @@ def dashboard_view(request):
         'is_fabrika': False,
         'today': today,
         'page_title': 'Kontrol Paneli',
-        'aylik_is_etiketleri': json.dumps([]),
-        'aylik_is_cirolari': json.dumps([]),
+        'aylik_is_etiketleri': json.dumps([]), # Chart.js için boş başlangıç
+        'aylik_is_cirolari': json.dumps([]),   # Chart.js için boş başlangıç
+        # Initialize all dashboard variables to 0 or empty lists to prevent NameError in template
         'bekleyen_teklif_talepleri_sayisi': 0,
         'onay_bekleyen_teklifler_sayisi': 0,
         'toplam_aktif_is_sayisi': 0,
@@ -132,142 +108,72 @@ def dashboard_view(request):
         'tamamlanan_sevkiyat_bu_ay_sayisi': 0,
         'bu_ayki_toplam_fatura_tutari': Decimal('0.00'),
         'vadesi_gecmis_odeme_sayisi': 0,
-        'last_items': [],
-        'recent_activities': [] # Başlangıçta boş
     }
-
-    # Son Hareketler (Recent Activities) - Genel bir örnek
-    # Bu kısmı kendi uygulamanızdaki gerçek aktivite loglarına göre doldurmanız gerekecektir.
-    # Şimdilik örnek verilerle doldurulmuştur.
-    # Örnek: Son 5 sevkiyat veya faturayı activity olarak gösterilebilir.
-    if current_company.company_type == 'NAKLIYECI':
-        # Nakliyeci için son 5 sevkiyat veya fatura
-        recent_shipments = Shipment.objects.filter(shipper_company=current_company).order_by('-created_at')[:3]
-        recent_invoices = Invoice.objects.filter(issued_by_shipper=current_company).order_by('-created_at')[:2]
-        
-        for s in recent_shipments:
-            context['recent_activities'].append({
-                'icon': 'fas fa-truck',
-                'message': f"Sevkiyat #{s.pk} ({s.get_status_display()})",
-                'date': s.created_at,
-                'url': reverse('ana_uygulama:shipment_detail_nakliyeci_view', args=[s.pk])
-            })
-        for i in recent_invoices:
-            context['recent_activities'].append({
-                'icon': 'fas fa-file-invoice-dollar',
-                'message': f"Fatura #{i.invoice_number} ({i.get_status_display()})",
-                'date': i.created_at,
-                'url': reverse('ana_uygulama:invoice_detail_nakliyeci_view', args=[i.pk])
-            })
-    elif current_company.company_type == 'FABRIKA':
-        # Fabrika için son 5 sevkiyat veya fatura
-        recent_shipments = Shipment.objects.filter(factory=current_company).order_by('-created_at')[:3]
-        recent_invoices = Invoice.objects.filter(billed_to_factory=current_company).order_by('-created_at')[:2]
-
-        for s in recent_shipments:
-            context['recent_activities'].append({
-                'icon': 'fas fa-truck-loading',
-                'message': f"Sevkiyat #{s.pk} ({s.get_status_display()})",
-                'date': s.created_at,
-                'url': reverse('ana_uygulama:shipment_detail_fabrika_view', args=[s.pk])
-            })
-        for i in recent_invoices:
-            context['recent_activities'].append({
-                'icon': 'fas fa-receipt',
-                'message': f"Fatura #{i.invoice_number} ({i.get_status_display()})",
-                'date': i.created_at,
-                'url': reverse('ana_uygulama:invoice_detail_fabrika_view', args=[i.pk])
-            })
-    
-    # Tarihe göre sırala ve ilk 5'i al
-    context['recent_activities'] = sorted(context['recent_activities'], key=lambda x: x['date'], reverse=True)[:5]
-
 
     if current_company.company_type == 'NAKLIYECI':
         context['is_nakliyeci'] = True
 
-        # Stat Kartları
-        # Bekleyen Teklif Talepleri: Nakliyeciye henüz fiyat verilmemiş, durumu 'PENDING' olan talepler
+        # Stat Cards
         context['bekleyen_teklif_talepleri_sayisi'] = QuoteRequest.objects.filter(
-            status='PENDING'
+            status='PENDING' # Tüm sistemdeki bekleyen teklif talepleri
         ).count()
-        # Onay Bekleyen Teklifler: Nakliyecinin fiyat verdiği ama henüz kabul edilmemiş/reddedilmemiş talepler
         context['onay_bekleyen_teklifler_sayisi'] = QuoteRequest.objects.filter(
             priced_by_shipper_company=current_company, status='QUOTED'
         ).count()
-        # Toplam Aktif İş Sayısı: Atama bekleyen, atandı, yolda olan sevkiyatlar
         context['toplam_aktif_is_sayisi'] = Shipment.objects.filter(
             shipper_company=current_company,
             status__in=['PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_TRANSIT']
         ).count()
-        # Toplam Araç Sayısı: Nakliyecinin yönettiği taşıyıcılara ait araçlar
         context['toplam_arac_sayisi'] = Vehicle.objects.filter(
             carrier__managed_by_shipper=current_company
         ).count()
 
-        # Son Aktif İşler (Nakliyeci)
-        # Örnek: Durumu tamamlanmış, faturalanmış veya iptal edilmiş olmayan son 5 sevkiyat
+        # Son Aktif İşler
         context['son_aktif_isler'] = Shipment.objects.filter(
             shipper_company=current_company
-        ).exclude(status__in=['DELIVERED', 'CANCELLED', 'BILLED', 'COMPLETED']).order_by('-created_at')[:5]
+        ).exclude(status__in=['DELIVERED', 'CANCELLED', 'BILLED']).order_by('-created_at')[:5]
 
         # Araç Uyarıları
         nakliyeci_araclari = Vehicle.objects.filter(carrier__managed_by_shipper=current_company)
-        muayenesi_gecmis_araclar_list = []
-        sigortasi_gecmis_araclar_list = []
-        muayenesi_yaklasan_araclar_list = []
-        sigortasi_yaklasan_araclar_list = []
-
         for vehicle in nakliyeci_araclari:
-            # Muayene kontrolü
+            # Muayene
             if vehicle.inspection_expiry_date:
                 if vehicle.inspection_expiry_date < today:
-                    muayenesi_gecmis_araclar_list.append(vehicle)
-                elif today <= vehicle.inspection_expiry_date <= seven_days_later:
-                    muayenesi_yaklasan_araclar_list.append(vehicle)
+                    context['muayenesi_gecmis_arac_sayisi'] += 1
+                elif vehicle.inspection_expiry_date <= seven_days_later:
+                    context['muayenesi_yaklasan_araclar'].append(vehicle)
 
-            # Sigorta kontrolü
+            # Sigorta
             if vehicle.insurance_expiry_date:
                 if vehicle.insurance_expiry_date < today:
-                    sigortasi_gecmis_araclar_list.append(vehicle)
-                elif today <= vehicle.insurance_expiry_date <= seven_days_later:
-                    sigortasi_yaklasan_araclar_list.append(vehicle)
+                    context['sigortasi_gecmis_arac_sayisi'] += 1
+                elif vehicle.insurance_expiry_date <= seven_days_later:
+                    context['sigortasi_yaklasan_araclar'].append(vehicle)
 
-        context['muayenesi_gecmis_arac_sayisi'] = len(muayenesi_gecmis_araclar_list)
-        context['sigortasi_gecmis_arac_sayisi'] = len(sigortasi_gecmis_araclar_list)
-        context['muayenesi_yaklasan_araclar'] = muayenesi_yaklasan_araclar_list
-        context['sigortasi_yaklasan_araclar'] = sigortasi_yaklasan_araclar_list
-
-
-        # Finans Özeti (Nakliyeci - Kesilen faturalar ve tahsilatlar)
+        # Finans Özeti
         nakliyeci_faturalari = Invoice.objects.filter(issued_by_shipper=current_company)
-
-        # Bu ay kesilen faturaların toplamı
         context['bu_ay_kesilen_faturalar_toplami'] = nakliyeci_faturalari.filter(
             issue_date__month=today.month, issue_date__year=today.year
-        ).aggregate(total_sum=Sum('total_amount'))['total_sum'] or Decimal('0.00')
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
 
-        # Ödenmemiş fatura sayısı (ödendi veya iptal edildi olmayanlar)
         context['odenmemis_fatura_sayisi'] = nakliyeci_faturalari.exclude(
             status__in=['PAID', 'VOID']
         ).count()
-        
-        # Vadesi geçmiş tahsilat sayısı (fabrika tarafından ödenmemiş ve vadesi geçmiş faturalar)
         context['vadesi_gecmis_tahsilat_sayisi'] = nakliyeci_faturalari.filter(
             due_date__lt=today
         ).exclude(status__in=['PAID', 'VOID']).count()
 
         # Aylık İş Hacmi (Son 6 Ay) Chart Data
         monthly_ciro_data = {}
-        # Son 6 ayın etiketlerini ve başlangıç değerlerini hazırla
+        # Initialize monthly_ciro_data for the last 6 months to ensure all months appear even if no data
         for i in range(6):
-            month_date = today - timedelta(days=(5-i) * 30) # En eski aydan başlayıp en yeniye doğru
+            month_date = today - timedelta(days=30 * i)
             month_key = (month_date.year, month_date.month)
             monthly_ciro_data[month_key] = Decimal('0.00')
 
-        # İlgili faturaları filtrele ve aylık toplamları al
+        # Aggregate invoice amounts by month
         invoices_for_chart = nakliyeci_faturalari.filter(
-            issue_date__gte=six_months_ago_start
+            issue_date__gte=(today - timedelta(days=180)).replace(day=1)
         ).annotate(
             month_year=TruncMonth('issue_date')
         ).values('month_year').annotate(
@@ -279,10 +185,10 @@ def dashboard_view(request):
             if month_key in monthly_ciro_data:
                 monthly_ciro_data[month_key] = item['total']
 
-        # Chart.js için verileri hazırla
+        # Prepare data for Chart.js
         chart_labels = []
         chart_data = []
-        # Ayları kronolojik sıraya göre sırala
+        # Sort keys to ensure chronological order
         sorted_month_keys = sorted(monthly_ciro_data.keys())
         month_map_tr = {
             1: 'Oca', 2: 'Şub', 3: 'Mar', 4: 'Nis', 5: 'May', 6: 'Haz',
@@ -297,34 +203,25 @@ def dashboard_view(request):
         context['aylik_is_etiketleri'] = json.dumps(chart_labels)
         context['aylik_is_cirolari'] = json.dumps(chart_data)
 
-        # Son Teklif Talepleri (Nakliyeci) - Last Items
-        context['last_items'] = QuoteRequest.objects.filter(
-            Q(status='PENDING') | Q(priced_by_shipper_company=current_company)
-        ).order_by('-created_at')[:5]
-
 
     elif current_company.company_type == 'FABRIKA':
         context['is_fabrika'] = True
 
-        # Stat Kartları
-        # Gönderdiğim Bekleyen Teklif Talepleri Sayısı: Fabrikanın gönderdiği ve hala 'PENDING' durumunda olan talepler
+        # Stat Cards
         context['gonderdigim_bekleyen_talepler_sayisi'] = QuoteRequest.objects.filter(
             factory=current_company, status='PENDING'
         ).count()
-        # Onayımı Bekleyen Teklifler Sayısı: Fabrikaya gelen ve durumu 'QUOTED' olan teklifler
         context['onayimi_bekleyen_teklifler_sayisi'] = QuoteRequest.objects.filter(
             factory=current_company, status='QUOTED'
         ).count()
-        # Aktif Sevkiyatlarım Sayısı: Durumu teslim edildi, iptal edildi, faturalanmış veya tamamlanmış olmayan sevkiyatlar
         context['aktif_sevkiyatlarim_sayisi'] = Shipment.objects.filter(
             factory=current_company
-        ).exclude(status__in=['DELIVERED', 'CANCELLED', 'BILLED', 'COMPLETED']).count()
-        # Yaklaşan Ödeme Sayısı: Fabrikanın ödemesi gereken, vadesi bugün ile otuz gün sonrası arasında olan faturalar
+        ).exclude(status__in=['DELIVERED', 'CANCELLED', 'BILLED']).count()
         context['yaklasan_odeme_sayisi'] = Invoice.objects.filter(
             billed_to_factory=current_company,
-            status__in=['SENT', 'PARTIALLY_PAID'], # Sadece gönderilmiş veya kısmen ödenmiş faturalar
+            status__in=['SENT', 'PARTIALLY_PAID'],
             due_date__gte=today,
-            due_date__lte=today + timedelta(days=30)
+            due_date__lte=thirty_days_later
         ).count()
 
         # Bu Ay Tamamlanan Sevkiyatlar
@@ -337,13 +234,10 @@ def dashboard_view(request):
 
         # Finans Özeti (Fabrika için Harcama)
         fabrika_faturalari = Invoice.objects.filter(billed_to_factory=current_company)
-        
-        # Bu ayki toplam fatura tutarı (Fabrikanın ödemesi gereken)
         context['bu_ayki_toplam_fatura_tutari'] = fabrika_faturalari.filter(
             issue_date__month=today.month, issue_date__year=today.year
-        ).aggregate(total_sum=Sum('total_amount'))['total_sum'] or Decimal('0.00')
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
 
-        # Vadesi geçmiş ödeme sayısı (Fabrikanın ödemesi gereken ve vadesi geçmiş faturalar)
         context['vadesi_gecmis_odeme_sayisi'] = fabrika_faturalari.filter(
             due_date__lt=today
         ).exclude(status__in=['PAID', 'VOID']).count()
@@ -351,12 +245,12 @@ def dashboard_view(request):
         # Aylık Harcama Hacmi (Son 6 Ay) Chart Data
         monthly_harcama_data = {}
         for i in range(6):
-            month_date = today - timedelta(days=(5-i) * 30)
+            month_date = today - timedelta(days=30 * i)
             month_key = (month_date.year, month_date.month)
             monthly_harcama_data[month_key] = Decimal('0.00')
 
         invoices_for_chart = fabrika_faturalari.filter(
-            issue_date__gte=six_months_ago_start
+            issue_date__gte=(today - timedelta(days=180)).replace(day=1)
         ).annotate(
             month_year=TruncMonth('issue_date')
         ).values('month_year').annotate(
@@ -384,16 +278,105 @@ def dashboard_view(request):
         context['aylik_is_etiketleri'] = json.dumps(chart_labels)
         context['aylik_is_cirolari'] = json.dumps(chart_data)
 
-        # Son Faturalar (Fabrika) - Last Items
-        last_invoices = Invoice.objects.filter(billed_to_factory=current_company).order_by('-issue_date')[:5]
-        for invoice in last_invoices:
-            invoice.is_overdue = invoice.due_date < today and not invoice.status in ['PAID', 'VOID']
-            invoice.is_due_soon = not invoice.status in ['PAID', 'VOID'] and today <= invoice.due_date <= seven_days_later
-        context['last_items'] = last_invoices
-
-
     return render(request, 'ana_uygulama/dashboard.html', context)
 
+
+def user_company_type_required(company_type):
+    """
+    Decorator that checks if the logged-in user's company type matches the required type.
+    Redirects to login if not authenticated, or to dashboard if not authorized.
+    """
+    def decorator(view_func):
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                messages.error(request, "Bu sayfaya erişim için giriş yapmalısınız.")
+                return redirect('ana_uygulama:login')
+            # Ensure the user has a company assigned and it matches the required type
+            if not hasattr(request.user, 'company') or not request.user.company or request.user.company.company_type != company_type:
+                messages.error(request, f"Bu sayfaya erişim yetkiniz yok. Sadece '{company_type}' firmaları erişebilir.")
+                return redirect('ana_uygulama:dashboard')
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+# Diğer görünümleriniz buraya gelebilir...
+# Örneğin: dashboard_view, quote_request_list_nakliyeci_view vb.
+
+# Sevkiyatlar (İşler) - Nakliyeci Rolü İçin
+@login_required
+@user_company_type_required('NAKLIYECI')
+def shipment_remove_vehicle_nakliyeci_view(request, pk):
+    """
+    Allows a shipper user to remove an assigned vehicle from a specific shipment.
+    Ensures that the shipment belongs to the user's company.
+    """
+    # Get the shipment object, ensuring it belongs to the logged-in user's company
+    shipment = get_object_or_404(Shipment, pk=pk, shipper_company=request.user.company)
+
+    if request.method == 'POST':
+        # Logic to remove the assigned vehicle
+        shipment.assigned_vehicle = None # Set the assigned_vehicle field to None
+        shipment.save() # Save the changes to the database
+        messages.success(request, f"Sevkiyat '{shipment.tracking_number}' üzerindeki araç başarıyla kaldırıldı.")
+        # Redirect to the shipment detail page after successful removal
+        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', pk=pk)
+    
+    # If it's a GET request, render the confirmation page
+    context = {
+        'shipment': shipment,
+        'page_title': "Araç Kaldır",
+        'object_name': shipment.tracking_number # Shipment tracking number for display in the template
+    }
+    # Render the confirmation template
+    # The path assumes your templates are structured as ana_uygulama/templates/ana_uygulama/nakliyeci/
+    return render(request, 'ana_uygulama/nakliyeci/shipment_remove_vehicle_confirm.html', context)
+
+def user_company_type_required(company_type):
+    """
+    Decorator that checks if the logged-in user's company type matches the required type.
+    Redirects to login if not authenticated, or to dashboard if not authorized.
+    """
+    def decorator(view_func):
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                messages.error(request, "Bu sayfaya erişim için giriş yapmalısınız.")
+                return redirect('ana_uygulama:login')
+            if not hasattr(request.user, 'company') or not request.user.company or request.user.company.company_type != company_type:
+                messages.error(request, f"Bu sayfaya erişim yetkiniz yok. Sadece '{company_type}' firmaları erişebilir.")
+                return redirect('ana_uygulama:dashboard')
+            return view_func(request, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
+# ... (Diğer view fonksiyonlarınız) ...
+
+
+@login_required
+@user_company_type_required('NAKLIYECI')
+def vehicle_create_nakliyeci_view(request):
+    """
+    Allows a shipper (NAKLIYECI) user to add a new vehicle to their company.
+    """
+    if request.method == 'POST':
+        form = VehicleForm(request.POST)
+        if form.is_valid():
+            vehicle = form.save(commit=False)
+            vehicle.company = request.user.company # Assign the vehicle to the logged-in user's company
+            vehicle.save()
+            messages.success(request, f"Araç '{vehicle.plate_number}' başarıyla eklendi.")
+            return redirect('ana_uygulama:vehicle_list_nakliyeci_view') # Redirect to vehicle list
+        else:
+            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+    else:
+        form = VehicleForm() # Instantiate an empty form for GET request
+
+    context = {
+        'form': form,
+        'page_title': "Yeni Araç Ekle"
+    }
+    return render(request, 'ana_uygulama/nakliyeci/vehicle_form.html', context) # Render the form template
 
 # === Shipper Views ===
 
@@ -644,7 +627,7 @@ def shipment_create_nakliyeci_view(request):
             try:
                 shipment.save()
                 messages.success(request, f"Yeni iş (Sevkiyat ID: {shipment.id}) başarıyla oluşturuldu.")
-                return redirect('ana_uygulama:shipment_list_nakliyeci_view')
+                return redirect('ana_uygulama:shipment_list_nakliyeci')
             except Exception as e:
                 messages.error(request, f"İş oluşturulurken bir hata oluştu: {e}")
         else:
@@ -670,7 +653,7 @@ def shipment_create_from_quote_nakliyeci_view(request, quote_id):
         return redirect('ana_uygulama:quote_request_list_nakliyeci')
     if Shipment.objects.filter(quote_request=quote_request).exists():
         messages.warning(request, f"Teklif #{quote_request.id} zaten bir işe dönüştürüldü.")
-        return redirect('ana_uygulama:shipment_list_nakliyeci_view')
+        return redirect('ana_uygulama:shipment_list_nakliyeci')
     if not quote_request.priced_by_shipper_company:
         messages.error(request, "HATA: Teklifi fiyatlandıran nakliyeci bilgisi eksik. İş oluşturulamadı.")
         return redirect('ana_uygulama:quote_request_list_nakliyeci')
@@ -696,7 +679,7 @@ def shipment_create_from_quote_nakliyeci_view(request, quote_id):
         quote_request.status = 'COMPLETED'
         quote_request.save()
         messages.success(request, f"Teklif #{quote_request.id} yeni işe dönüştürüldü, ID:{new_shipment.id}.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=new_shipment.id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=new_shipment.id)
     except Exception as e:
         messages.error(request, f"Teklif işe dönüştürülürken bir hata oluştu: {e}")
         return redirect('ana_uygulama:quote_request_list_nakliyeci')
@@ -739,7 +722,7 @@ def shipment_update_nakliyeci_view(request, shipment_id):
 
     if shipment_to_update.status in ['DELIVERED', 'BILLED', 'CANCELLED', 'COMPLETED']:
         messages.error(request, f"İş (ID: {shipment_to_update.id}) durumu '{shipment_to_update.get_status_display()}' olduğu için düzenlenemez.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment_id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment_id)
 
     if request.method == 'POST':
         form = ShipmentFormNakliyeci(request.POST, request.FILES, instance=shipment_to_update, request_user_company=current_shipper_company)
@@ -762,7 +745,7 @@ def shipment_update_nakliyeci_view(request, shipment_id):
             try:
                 updated_shipment.save()
                 messages.success(request, f"İş (Sevkiyat ID: {updated_shipment.id}) başarıyla güncellendi.")
-                return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=updated_shipment.id)
+                return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=updated_shipment.id)
             except Exception as e:
                 messages.error(request, f"İş güncellenirken bir hata oluştu: {e}")
         else:
@@ -786,12 +769,12 @@ def shipment_delete_nakliyeci_view(request, shipment_id):
     shipment = get_object_or_404(Shipment, pk=shipment_id)
     if shipment.shipper_company != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu sevkiyatı silme izniniz yok.")
-        return redirect('ana_uygulama:shipment_list_nakliyeci_view')
+        return redirect('ana_uygulama:shipment_list_nakliyeci')
 
     if request.method == 'POST':
         shipment.delete()
         messages.success(request, "Sevkiyat başarıyla silindi.")
-        return redirect('ana_uygulama:shipment_list_nakliyeci_view')
+        return redirect('ana_uygulama:shipment_list_nakliyeci')
 
     context = {
         'shipment': shipment,
@@ -814,7 +797,7 @@ def assign_vehicle_to_shipment_view(request, shipment_id):
     # Check if the shipment status allows vehicle assignment/unassignment
     if shipment.status not in ['PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_TRANSIT']:
         messages.error(request, f"Bu iş için araç atama/boşa alma yapılamaz. Durum: {shipment.get_status_display()}")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
 
     current_shipper_company = request.user.company
 
@@ -832,7 +815,7 @@ def assign_vehicle_to_shipment_view(request, shipment_id):
                 messages.success(request, f"İş #{shipment.id} için araç ataması başarıyla kaldırıldı ve durum 'Atama Bekliyor' olarak güncellendi.")
             else:
                 messages.info(request, "Bu iş zaten bir araca atanmamış.")
-            return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
+            return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
 
         elif action == 'assign':
             # Handle assigning/changing the vehicle
@@ -855,12 +838,12 @@ def assign_vehicle_to_shipment_view(request, shipment_id):
                     for warning in warning_messages: messages.warning(request, warning + " Araç yine de atandı.")
 
                 shipment.assigned_vehicle = selected_vehicle
-                # If shipment is currently pending assignment, change status to ASSIGNED
+                # If currently pending assignment, change status to ASSIGNED
                 if shipment.status == 'PENDING_ASSIGNMENT':
                     shipment.status = 'ASSIGNED'
                 shipment.save()
                 messages.success(request, f"İş #{shipment.id} araca {selected_vehicle.plate_number} atandı.")
-                return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
+                return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
             else:
                 messages.error(request, "Lütfen geçerli bir araç seçin.")
         
@@ -891,7 +874,7 @@ def update_shipment_status_nakliyeci_view(request, shipment_id):
     shipment = get_object_or_404(Shipment, id=shipment_id, shipper_company=request.user.company)
     if shipment.status in ['BILLED', 'CANCELLED', 'COMPLETED']:
         messages.error(request, f"Durumu '{shipment.get_status_display()}' olan bir işin durumu değiştirilemez.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
 
     if request.method == 'POST':
         form = ShipmentStatusUpdateForm(request.POST, instance=shipment)
@@ -905,7 +888,7 @@ def update_shipment_status_nakliyeci_view(request, shipment_id):
         else:
             for field, errors in form.errors.items():
                 for error in errors: messages.error(request, f"{form.fields[field].label}: {error}")
-    return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
+    return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
 
 
 # Shipper - Vehicle Management
@@ -964,7 +947,7 @@ def vehicle_create_nakliyeci_view(request):
                 if selected_carrier:
                     return redirect('ana_uygulama:carrier_detail_nakliyeci_view', pk=selected_carrier.pk)
                 else:
-                    return redirect('ana_uygulama:vehicle_list_nakliyeci_view')
+                    return redirect('ana_uygulama:vehicle_list_nakliyeci')
             except Exception as e:
                 messages.error(request, f"Araç eklenirken bir hata oluştu: {e}.")
         else:
@@ -1018,7 +1001,7 @@ def vehicle_update_nakliyeci_view(request, vehicle_id):
             try:
                 form.save()
                 messages.success(request, f"Araç {vehicle_to_update.plate_number} başarıyla güncellendi.")
-                return redirect('ana_uygulama:vehicle_list_nakliyeci_view')
+                return redirect('ana_uygulama:vehicle_list_nakliyeci')
             except Exception as e:
                 messages.error(request, f"Araç güncellenirken bir hata oluştu: {e}.")
         else:
@@ -1042,7 +1025,7 @@ def vehicle_delete_nakliyeci_view(request, vehicle_id):
     vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
     if vehicle.carrier.managed_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu aracı silme izniniz yok.")
-        return redirect('ana_uygulama:vehicle_list_nakliyeci_view')
+        return redirect('ana_uygulama:vehicle_list_nakliyeci')
 
     # Before deleting the vehicle, check if it's assigned to any active shipments.
     # If so, prevent deletion and advise to unassign first.
@@ -1059,7 +1042,7 @@ def vehicle_delete_nakliyeci_view(request, vehicle_id):
     if request.method == 'POST':
         vehicle.delete()
         messages.success(request, f"Araç {vehicle.plate_number} başarıyla silindi.")
-        return redirect('ana_uygulama:vehicle_list_nakliyeci_view')
+        return redirect('ana_uygulama:vehicle_list_nakliyeci')
 
     context = {
         'vehicle': vehicle,
@@ -1103,7 +1086,7 @@ def carrier_create_nakliyeci_view(request):
             try:
                 carrier.save()
                 messages.success(request, f"Taşıyıcı '{carrier.full_name}' başarıyla eklendi.")
-                return redirect('ana_uygulama:carrier_list_nakliyeci_view')
+                return redirect('ana_uygulama:carrier_list_nakliyeci')
             except Exception as e:
                 messages.error(request, f"Taşıyıcı eklenirken bir hata oluştu: {e}")
         else:
@@ -1187,12 +1170,12 @@ def carrier_delete_nakliyeci_view(request, pk):
     carrier = get_object_or_404(Carrier, pk=pk)
     if carrier.managed_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu taşıyıcıyı silme izniniz yok.")
-        return redirect('ana_uygulama:carrier_list_nakliyeci_view')
+        return redirect('ana_uygulama:carrier_list_nakliyeci')
 
     # Check if this carrier has any vehicles assigned to active shipments
     vehicles_with_active_shipments = Vehicle.objects.filter(
         carrier=carrier,
-        assigned_shipments__status__in=['PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_TRANSIT']
+        status__in=['PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_TRANSIT']
     ).distinct().count()
 
     if vehicles_with_active_shipments > 0:
@@ -1203,7 +1186,7 @@ def carrier_delete_nakliyeci_view(request, pk):
     if request.method == 'POST':
         carrier.delete()
         messages.success(request, f"Taşıyıcı {carrier.full_name} başarıyla silindi.")
-        return redirect('ana_uygulama:carrier_list_nakliyeci_view')
+        return redirect('ana_uygulama:carrier_list_nakliyeci')
 
     context = {
         'carrier': carrier,
@@ -1223,7 +1206,7 @@ def carrier_bank_account_add_view(request, carrier_id):
     carrier = get_object_or_404(Carrier, id=carrier_id, managed_by_shipper=request.user.company)
 
     if request.method == 'POST':
-        form = BankAccountForm(request.POST) # request_user'ı burada geçirmeye gerek yok
+        form = BankAccountForm(request.POST, carrier_instance=carrier)
         if form.is_valid():
             bank_account = form.save(commit=False)
             bank_account.carrier = carrier
@@ -1233,7 +1216,7 @@ def carrier_bank_account_add_view(request, carrier_id):
         else:
             messages.error(request, "Lütfen formdaki hataları düzeltin.")
     else:
-        form = BankAccountForm() # request_user'ı burada geçirmeye gerek yok
+        form = BankAccountForm(carrier_instance=carrier)
 
     context = {'form': form, 'carrier': carrier, 'page_title': f"{carrier.full_name} için Yeni Banka Hesabı"}
     return render(request, 'ana_uygulama/nakliyeci/bank_account_form.html', context)
@@ -1250,7 +1233,7 @@ def carrier_bank_account_edit_view(request, carrier_id, pk):
     bank_account = get_object_or_404(BankAccount, pk=pk, carrier=carrier)
 
     if request.method == 'POST':
-        form = BankAccountForm(request.POST, instance=bank_account) # request_user'ı burada geçirmeye gerek yok
+        form = BankAccountForm(request.POST, instance=bank_account, carrier_instance=carrier)
         if form.is_valid():
             form.save()
             messages.success(request, "Banka hesabı başarıyla güncellendi.")
@@ -1258,7 +1241,7 @@ def carrier_bank_account_edit_view(request, carrier_id, pk):
         else:
             messages.error(request, "Lütfen formdaki hataları düzeltin.")
     else:
-        form = BankAccountForm(instance=bank_account) # request_user'ı burada geçirmeye gerek yok
+        form = BankAccountForm(instance=bank_account, carrier_instance=carrier)
 
     context = {'form': form, 'carrier': carrier, 'bank_account': bank_account, 'page_title': "Banka Hesabını Düzenle"}
     return render(request, 'ana_uygulama/nakliyeci/bank_account_form.html', context)
@@ -1373,7 +1356,7 @@ def invoice_mark_as_paid_nakliyeci_view(request, invoice_id):
     # Permission check
     if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu faturayı ödenmiş olarak işaretleme izniniz yok.")
-        return redirect('ana_uygulama:invoice_list_nakliyeci_view')
+        return redirect('ana_uygulama:invoice_list_nakliyeci')
 
     if request.method == 'POST':
         if invoice.status in ['PAID', 'VOID']:
@@ -1390,16 +1373,19 @@ def invoice_mark_as_paid_nakliyeci_view(request, invoice_id):
     else:
         messages.error(request, "Bu işlem sadece POST isteği ile yapılabilir.")
 
-    return redirect('ana_uygulama:invoice_list_nakliyeci_view')
+    return redirect('ana_uygulama:invoice_list_nakliyeci')
 
 
 @login_required
-def invoice_detail_nakliyeci_view(request, pk):  # DOĞRU
-    invoice = get_object_or_404(Invoice, pk=pk)
+def invoice_detail_nakliyeci_view(request, invoice_id):
+    """
+    Displays the details of a specific invoice for the shipper role.
+    """
+    invoice = get_object_or_404(Invoice, pk=invoice_id)
 
     if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu faturayı görüntüleme izniniz yok.")
-        return redirect('ana_uygulama:invoice_list_nakliyeci_view')
+        return redirect('ana_uygulama:invoice_list_nakliyeci')
 
     context = {
         'invoice': invoice,
@@ -1407,15 +1393,18 @@ def invoice_detail_nakliyeci_view(request, pk):  # DOĞRU
         'calculated_vat_amount': invoice.total_vat_amount if invoice.total_vat_amount is not None else Decimal('0.00'),
         'calculated_total_amount': invoice.total_amount if invoice.total_amount is not None else Decimal('0.00'),
     }
-    return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', {'invoice': invoice })
+    return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', context)
 
 @login_required
-def invoice_update_nakliyeci_view(request, pk):
+def invoice_update_view(request, pk):
+    """
+    View for the shipper to update invoice information.
+    """
     invoice = get_object_or_404(Invoice, pk=pk)
 
     if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu faturayı düzenleme izniniz yok.")
-        return redirect('ana_uygulama:invoice_list_nakliyeci_view')
+        return redirect('ana_uygulama:invoice_list_nakliyeci')
 
     shipment = invoice.shipment
     net_amount_initial = invoice.amount # Amount alanı artık direkt modelden geliyor
@@ -1426,7 +1415,7 @@ def invoice_update_nakliyeci_view(request, pk):
             invoice = form.save(commit=False)
             invoice.save() # Bu save çağrısı modeldeki save() metodu ile total_amount'ı günceller.
             messages.success(request, f"Fatura {invoice.invoice_number} başarıyla güncellendi.")
-            return redirect('ana_uygulama:invoice_detail_nakliyeci_view', invoice_id=invoice.pk) # URL adı düzeltildi
+            return redirect('ana_uygulama:invoice_detail_nakliyeci', invoice_id=invoice.pk) # URL adı düzeltildi
     else:
         form = InvoiceForm(instance=invoice, initial={'amount': net_amount_initial, 'vat_rate': invoice.vat_rate})
 
@@ -1439,23 +1428,45 @@ def invoice_update_nakliyeci_view(request, pk):
     }
     return render(request, 'ana_uygulama/nakliyeci/invoice_form.html', context)
 
-@login_required
-@user_company_type_required('NAKLIYECI') # Sadece Nakliyeci rolü için erişilebilir
-def shipment_remove_vehicle_nakliyeci_view(request, pk):
-    shipment = get_object_or_404(Shipment, pk=pk, shipper_company=request.user.company)
-    if request.method == 'POST':
-        # Aracın atamasını kaldır
-        shipment.assigned_vehicle = None
-        # Sevkiyat durumunu "Atandı"dan başka bir duruma (örn: "Yeni" veya "Onay Bekliyor"a) çevirebilirsiniz.
-        # Örneğin: shipment.status = 'NEW'
-        shipment.save()
-        messages.success(request, f"'{shipment.load_description}' sevkiyatından araç ataması başarıyla kaldırıldı.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', pk=shipment.id)
-    # POST dışındaki istekler için (örn: direkt URL'e gidildiğinde) detay sayfasına yönlendir.
-    return redirect('ana_uygulama:shipment_detail_nakliyeci_view', pk=shipment.id)
+# Decorator to restrict access to users with a specific company type
+from functools import wraps
+from django.shortcuts import redirect
+from django.contrib import messages
+
+def user_company_type_required(company_type):
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            if not hasattr(request.user, 'company') or request.user.company is None or request.user.company.company_type != company_type:
+                messages.error(request, "Bu sayfaya erişim izniniz yok.")
+                return redirect('ana_uygulama:dashboard')
+            return view_func(request, *args, **kwargs)
+        return _wrapped_view
+    return decorator
 
 @login_required
-def invoice_delete_nakliyeci_view(request, pk):
+@user_company_type_required('NAKLIYECI')
+def bank_account_list_nakliyeci_view(request):
+    """
+    Nakliyeci rolü için kendi şirketine ait banka hesaplarını listeler.
+    Kullanıcının şirketinin 'NAKLIYECI' tipinde olması ve giriş yapmış olması gerekir.
+    """
+    # Mevcut kullanıcının şirketine ait banka hesaplarını çekiyoruz
+    # `request.user.company` mevcut kullanıcının ilişkili olduğu Company nesnesidir.
+    bank_accounts = BankAccount.objects.filter(company=request.user.company).order_by('bank_name')
+
+    context = {
+        'bank_accounts': bank_accounts,
+        'page_title': "Banka Hesaplarım",
+        'form': BankAccountForm(), # Yeni hesap ekleme formu için boş bir form da gönderilebilir
+                                 # veya bu, ayrı bir `bank_account_create_nakliyeci_view` içinde yapılır.
+                                 # Eğer bu view'de hem listeleyip hem de ekleme formunu göstermek isterseniz bu satır kalır.
+    }
+    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_list.html
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_list.html', context)
+
+@login_required
+def invoice_delete_view(request, pk):
     """
     View for the shipper to delete an invoice.
     """
@@ -1463,13 +1474,13 @@ def invoice_delete_nakliyeci_view(request, pk):
 
     if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu faturayı silme izniniz yok.")
-        return redirect('ana_uygulama:invoice_list_nakliyeci_view')
+        return redirect('ana_uygulama:invoice_list_nakliyeci')
 
     if request.method == 'POST':
         invoice_number = invoice.invoice_number
         invoice.delete() # Model'deki delete metodu çağrılacak
         messages.success(request, f"Fatura {invoice_number} başarıyla silindi.")
-        return redirect('ana_uygulama:invoice_list_nakliyeci_view')
+        return redirect('ana_uygulama:invoice_list_nakliyeci')
 
     context = {
         'invoice': invoice,
@@ -1492,7 +1503,7 @@ def invoice_create_view(request, shipment_id):
     # Check if an invoice already exists for this shipment
     if Invoice.objects.filter(shipment=shipment).exists():
         messages.warning(request, f"Sevkiyat #{shipment.id} için zaten bir fatura var.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
 
 
     net_amount = shipment.price_for_factory if shipment.price_for_factory is not None else Decimal('0.00')
@@ -1512,7 +1523,7 @@ def invoice_create_view(request, shipment_id):
             shipment.save()
 
             messages.success(request, f"Fatura {invoice.invoice_number} başarıyla oluşturuldu ve Sevkiyat #{shipment.pk} faturalandırıldı.")
-            return redirect('ana_uygulama:invoice_detail_nakliyeci_view', invoice_id=invoice.pk)
+            return redirect('ana_uygulama:invoice_detail_nakliyeci', invoice_id=invoice.pk)
     else:
         # Pass initial data for amount if it's based on shipment price
         # Default invoice type and status, current date for issue date
@@ -1569,7 +1580,7 @@ def payment_create_nakliyeci_view(request):
             try:
                 payment.save()
                 messages.success(request, f"Ödeme/Tahsilat kaydı başarıyla eklendi (Tutar: {payment.amount} TL).")
-                return redirect('ana_uygulama:payment_list_nakliyeci_view')
+                return redirect('ana_uygulama:payment_list_nakliyeci')
             except Exception as e:
                 messages.error(request, f"Kayıt eklenirken bir hata oluştu: {e}")
         else:
@@ -1591,7 +1602,7 @@ def payment_detail_nakliyeci_view(request, pk):
     payment = get_object_or_404(Payment, pk=pk)
     if payment.shipper_company != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu kaydı görüntüleme izniniz yok.")
-        return redirect('ana_uygulama:payment_list_nakliyeci_view')
+        return redirect('ana_uygulama:payment_list_nakliyeci')
 
     context = {
         'payment': payment,
@@ -1607,7 +1618,7 @@ def payment_update_nakliyeci_view(request, pk):
     payment = get_object_or_404(Payment, pk=pk)
     if payment.shipper_company != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu kaydı güncelleme izniniz yok.")
-        return redirect('ana_uygulama:payment_list_nakliyeci_view')
+        return redirect('ana_uygulama:payment_list_nakliyeci')
 
     if request.method == 'POST':
         form = PaymentForm(request.POST, instance=payment, request_user=request.user)
@@ -1638,12 +1649,12 @@ def payment_delete_nakliyeci_view(request, pk):
     payment = get_object_or_404(Payment, pk=pk)
     if payment.shipper_company != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu kaydı silme izniniz yok.")
-        return redirect('ana_uygulama:payment_list_nakliyeci_view')
+        return redirect('ana_uygulama:payment_list_nakliyeci')
 
     if request.method == 'POST':
         payment.delete()
         messages.success(request, f"Ödeme/Tahsilat kaydı #{pk} başarıyla silindi.")
-        return redirect('ana_uygulama:payment_list_nakliyeci_view')
+        return redirect('ana_uygulama:payment_list_nakliyeci')
 
     context = {
         'payment': payment,
@@ -1678,58 +1689,16 @@ def company_user_create_nakliyeci_view(request):
         if form.is_valid():
             new_user = form.save(commit=False)
             new_user.company = request.user.company
-           
             new_user.is_staff = False
             new_user.save()
             messages.success(request, f"Kullanıcı {new_user.username} başarıyla eklendi.")
-            return redirect('ana_uygulama:company_user_list_nakliyeci_view')
+            return redirect('ana_uygulama:company_user_list_nakliyeci')
         else:
             messages.error(request, "Lütfen formdaki hataları düzeltin.")
     else:
         form = CompanyUserCreationForm()
     context = {'form': form, 'company_type_display': 'Nakliyeci', 'page_title': "Yeni Nakliyeci Kullanıcısı Ekle"}
     return render(request, 'ana_uygulama/company_user_form.html', context)
-
-# Shipper - User Update
-@login_required
-def company_user_update_nakliyeci_view(request, pk):
-    """
-    Nakliyeci firma yöneticisinin şirketlerindeki mevcut kullanıcıları güncellemesi için görünüm.
-    """
-    if not request.user.company or request.user.company.company_type != 'NAKLIYECI':
-        messages.error(request, "Bu sayfaya erişim izniniz yok.")
-        return redirect('ana_uygulama:dashboard')
-    user_to_update = get_object_or_404(CustomUser, pk=pk, company=request.user.company)
-    if request.method == 'POST':
-        form = CompanyUserCreationForm(request.POST, instance=user_to_update)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"Kullanıcı {user_to_update.username} bilgileri başarıyla güncellendi.")
-            return redirect('ana_uygulama:company_user_list_nakliyeci_view')
-        else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
-    else:
-        form = CompanyUserCreationForm(instance=user_to_update)
-    context = {'form': form, 'page_title': "Şirket Kullanıcısını Güncelle"}
-    return render(request, 'ana_uygulama/company_user_form.html', context)
-
-
-# Shipper - User Delete
-@login_required
-def company_user_delete_nakliyeci_view(request, pk):
-    """
-    Nakliyeci firma yöneticisinin şirketlerinden kullanıcıları silmesi için görünüm.
-    """
-    if not request.user.company or request.user.company.company_type != 'NAKLIYECI':
-        messages.error(request, "Bu sayfaya erişim izniniz yok.")
-        return redirect('ana_uygulama:dashboard')
-    user_to_delete = get_object_or_404(CustomUser, pk=pk, company=request.user.company)
-    if request.method == 'POST':
-        user_to_delete.delete()
-        messages.success(request, f"Kullanıcı {user_to_delete.username} başarıyla silindi.")
-        return redirect('ana_uygulama:company_user_list_nakliyeci_view')
-    context = {'user_to_delete': user_to_delete, 'page_title': "Şirket Kullanıcısını Sil"}
-    return render(request, 'ana_uygulama/company_user_confirm_delete.html', context)
 
 
 # Shipper - Company Listing (Viewing Other Companies)
@@ -1786,7 +1755,7 @@ def factory_create_by_nakliyeci_view(request):
             try:
                 factory_company.save()
                 messages.success(request, f"Fabrika '{factory_company.name}' başarıyla eklendi.")
-                return redirect('ana_uygulama:company_list_for_nakliyeci_view') # Redirect to company list
+                return redirect('ana_uygulama:company_list_for_nakliyeci') # Redirect to company list
             except Exception as e:
                 messages.error(request, f"Fabrika eklenirken bir hata oluştu: {e}")
         else:
@@ -1833,7 +1802,7 @@ def quote_request_create_fabrika_view(request):
             quote_request.status = 'PENDING'
             quote_request.save()
             messages.success(request, "Fiyat teklifi talebiniz başarıyla oluşturuldu.")
-            return redirect('ana_uygulama:quote_request_list_fabrika_view')
+            return redirect('ana_uygulama:quote_request_list_fabrika')
         else:
             messages.error(request, "Lütfen formdaki hataları düzeltin.")
     else:
@@ -1861,7 +1830,7 @@ def request_quote_update_fabrika_view(request, pk):
     quote_request = get_object_or_404(QuoteRequest, pk=pk)
     if quote_request.factory != request.user.company or quote_request.status != 'PENDING':
         messages.error(request, "Bu teklif talebini güncelleme izniniz yok veya durumu uygun değil.")
-        return redirect('ana_uygulama:quote_request_list_fabrika_view')
+        return redirect('ana_uygulama:quote_request_list_fabrika')
 
     if request.method == 'POST':
         form = QuoteRequestForm(request.POST, instance=quote_request)
@@ -1887,12 +1856,12 @@ def quote_request_delete_fabrika_view(request, pk):
     quote_request = get_object_or_404(QuoteRequest, pk=pk)
     if quote_request.factory != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu teklif talebini silme izniniz yok.")
-        return redirect('ana_uygulama:quote_request_list_fabrika_view')
+        return redirect('ana_uygulama:quote_request_list_fabrika')
 
     if request.method == 'POST':
         quote_request.delete()
         messages.success(request, "Teklif talebi başarıyla silindi.")
-        return redirect('ana_uygulama:quote_request_list_fabrika_view')
+        return redirect('ana_uygulama:quote_request_list_fabrika')
 
     context = {
         'quote_request': quote_request,
@@ -1909,11 +1878,11 @@ def accept_quote_fabrika_view(request, quote_id):
     quote_request = get_object_or_404(QuoteRequest, pk=quote_id)
     if quote_request.factory != request.user.company or quote_request.status != 'QUOTED':
         messages.error(request, "Bu teklifi kabul etme izniniz yok veya durumu uygun değil.")
-        return redirect('ana_uygulama:quote_request_list_fabrika_view')
+        return redirect('ana_uygulama:quote_request_list_fabrika')
 
     if not hasattr(quote_request, 'priced_by_shipper_company') or not quote_request.priced_by_shipper_company:
          messages.error(request, "HATA: Teklifi fiyatlandıran nakliyeci bilgisi eksik. İş oluşturulamadı.")
-         return redirect('ana_uygulama:quote_request_list_fabrika_view')
+         return redirect('ana_uygulama:quote_request_list_fabrika')
 
     try:
         Shipment.objects.create(
@@ -1938,7 +1907,7 @@ def accept_quote_fabrika_view(request, quote_id):
         # If error occurs, keep quote status as QUOTED or define a separate 'ACCEPT_FAILED' status
         quote_request.status = 'QUOTED'
         quote_request.save()
-    return redirect('ana_uygulama:quote_request_list_fabrika_view')
+    return redirect('ana_uygulama:quote_request_list_fabrika')
 
 
 @login_required
@@ -1949,12 +1918,12 @@ def reject_quote_fabrika_view(request, quote_id):
     quote_request = get_object_or_404(QuoteRequest, pk=quote_id)
     if quote_request.factory != request.user.company or quote_request.status != 'QUOTED':
         messages.error(request, "Bu teklifi reddetme izniniz yok veya durumu uygun değil.")
-        return redirect('ana_uygulama:quote_request_list_fabrika_view')
+        return redirect('ana_uygulama:quote_request_list_fabrika')
 
     quote_request.status = 'REJECTED'
     quote_request.save()
     messages.success(request, f"Teklif talebi #{quote_request.pk} reddedildi.")
-    return redirect('ana_uygulama:quote_request_list_fabrika_view')
+    return redirect('ana_uygulama:quote_request_list_fabrika')
 
 
 # Factory - Shipments Management
@@ -1983,7 +1952,7 @@ def shipment_detail_fabrika_view(request, shipment_id):
     shipment = get_object_or_404(Shipment, pk=shipment_id)
     if shipment.factory != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu sevkiyatı görüntüleme izniniz yok.")
-        return redirect('ana_uygulama:shipment_list_fabrika_view')
+        return redirect('ana_uygulama:shipment_list_fabrika')
 
     context = {
         'shipment': shipment,
@@ -2018,7 +1987,7 @@ def invoice_detail_fabrika_view(request, invoice_id):
     invoice = get_object_or_404(Invoice, pk=invoice_id)
     if invoice.billed_to_factory != request.user.company and not request.user.is_superuser:
         messages.error(request, "Bu faturayı görüntüleme izniniz yok.")
-        return redirect('ana_uygulama:invoice_list_fabrika_view')
+        return redirect('ana_uygulama:invoice_list_fabrika')
 
     context = {
         'invoice': invoice,
@@ -2179,18 +2148,16 @@ def global_search_view(request):
             temp_shipments = temp_shipments.filter(factory=user_company)
         context['results_shipments'] = temp_shipments.distinct()[:10]
 
-        # Vehicle search (for shippers only)
+        # Vehicle search
+        vehicle_q = (
+            Q(plate_number__icontains=query) |
+            Q(driver_name__icontains=query) |
+            Q(carrier__full_name__icontains=query)
+        )
+        temp_vehicles = Vehicle.objects.filter(vehicle_q)
         if is_shipper and user_company:
-            vehicles = Vehicle.objects.filter(
-                Q(plate_number__icontains=query) | Q(driver_name__icontains=query)
-            ).filter(carrier__managed_by_shipper=user_company)
-            for v in vehicles.distinct()[:5]:
-                # Correct the URL name to match urls.py (e.g., 'vehicle_detail_nakliyeci' without '_view')
-                context['results_vehicles'].append({
-                    'type': 'Araç',
-                    'text': f'{v.plate_number} ({v.driver_name})',
-                    'url': reverse('ana_uygulama:vehicle_detail_nakliyeci_view', args=[v.pk]) # Corrected URL name
-                })
+            temp_vehicles = temp_vehicles.filter(carrier__managed_by_shipper=user_company)
+        context['results_vehicles'] = temp_vehicles.distinct()[:10]
 
         # Carrier search
         carrier_q = (
@@ -2256,8 +2223,6 @@ def global_search_view(request):
         temp_payments = Payment.objects.filter(payment_q)
         if is_shipper and user_company:
             temp_payments = temp_payments.filter(shipper_company=user_company)
-        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
-            temp_payments = temp_payments.filter(recorded_by_user__company=user_company, direction='OUTGOING') # Fabrika için sadece giden ödemeler
         context['results_payments'] = temp_payments.distinct()[:10]
 
     return render(request, 'ana_uygulama/search_results.html', context)
@@ -2285,14 +2250,15 @@ def ajax_live_search_view(request):
         )
         if is_shipper and user_company:
             shipments = shipments.filter(shipper_company=user_company)
-        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
+        elif user_company and user_company.company_type == 'FABRIKA':
             shipments = shipments.filter(factory=user_company)
 
         for s in shipments.distinct()[:5]: # Max 5 results
+            # Correct the URL name to match urls.py (e.g., 'shipment_detail_nakliyeci' without '_view')
             results.append({
                 'type': 'İş',
                 'text': f'#{s.pk}: {s.origin} -> {s.destination}',
-                'url': reverse('ana_uygulama:shipment_detail_nakliyeci_view', args=[s.pk]) if is_shipper else reverse('ana_uygulama:shipment_detail_fabrika_view', args=[s.pk])
+                'url': reverse('ana_uygulama:shipment_detail_nakliyeci', args=[s.pk]) # Corrected URL name
             })
 
         # Example: Vehicle search (for shippers only)
@@ -2301,132 +2267,14 @@ def ajax_live_search_view(request):
                 Q(plate_number__icontains=query) | Q(driver_name__icontains=query)
             ).filter(carrier__managed_by_shipper=user_company)
             for v in vehicles.distinct()[:5]:
-                results.append({ # Append to results, not context['results_vehicles']
+                # Correct the URL name to match urls.py (e.g., 'vehicle_detail_nakliyeci' without '_view')
+                results.append({
                     'type': 'Araç',
                     'text': f'{v.plate_number} ({v.driver_name})',
-                    'url': reverse('ana_uygulama:vehicle_detail_nakliyeci_view', args=[v.pk]) # Corrected URL name
+                    'url': reverse('ana_uygulama:vehicle_detail_nakliyeci', args=[v.pk]) # Corrected URL name
                 })
 
-        # Carrier search
-        carrier_q = (
-            Q(full_name__icontains=query) |
-            Q(phone__icontains=query) |
-            Q(email__icontains=query) |
-            Q(tax_id_number__icontains=query)
-        )
-        temp_carriers = Carrier.objects.filter(carrier_q)
-        if is_shipper and user_company:
-            temp_carriers = temp_carriers.filter(managed_by_shipper=user_company)
-        for c in temp_carriers.distinct()[:5]: # Max 5 results
-            results.append({
-                'type': 'Taşıyıcı',
-                'text': f'Taşıyıcı: {c.full_name}',
-                'url': reverse('ana_uygulama:carrier_detail_nakliyeci_view', args=[c.pk])
-            })
-
-        # Company (Factory) search
-        temp_factories = Company.objects.filter(
-            Q(company_type='FABRIKA') &
-            (Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query))
-        )
-        for f in temp_factories.distinct()[:5]: # Max 5 results
-            results.append({
-                'type': 'Fabrika Firma',
-                'text': f'Fabrika: {f.name}',
-                'url': reverse('ana_uygulama:company_detail_view', args=[f.pk]) # Generic company detail for now
-            })
-
-        # Company (Shipper) search
-        temp_shippers = Company.objects.filter(
-            Q(company_type='NAKLIYECI') &
-            (Q(name__icontains=query) | Q(email__icontains=query) | Q(phone__icontains=query)) &
-            ~Q(pk=user_company.pk if user_company else -1) # Exclude own company
-        )
-        for s in temp_shippers.distinct()[:5]: # Max 5 results
-            results.append({
-                'type': 'Nakliyeci Firma',
-                'text': f'Nakliyeci: {s.name}',
-                'url': reverse('ana_uygulama:company_detail_view', args=[s.pk]) # Generic company detail for now
-            })
-
-        # Invoice search
-        invoice_q = (
-            Q(invoice_number__icontains=query) |
-            Q(billed_to_factory__name__icontains=query) |
-            Q(shipment__pk__icontains=query)
-        )
-        temp_invoices = Invoice.objects.filter(invoice_q)
-        if is_shipper and user_company:
-            temp_invoices = temp_invoices.filter(issued_by_shipper=user_company)
-        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
-            temp_invoices = temp_invoices.filter(billed_to_factory=user_company)
-        for i in temp_invoices.distinct()[:5]: # Max 5 results
-            results.append({
-                'type': 'Fatura',
-                'text': f'Fatura: #{i.invoice_number} ({i.total_amount} TL)',
-                'url': reverse('ana_uygulama:invoice_detail_nakliyeci_view' if is_shipper else 'ana_uygulama:invoice_detail_fabrika_view', args=[i.pk])
-            })
-
-        # QuoteRequest search
-        quote_q = (
-            Q(pk__icontains=query) |
-            Q(origin__icontains=query) |
-            Q(destination__icontains=query) |
-            Q(factory__name__icontains=query)
-        )
-        temp_quotes = QuoteRequest.objects.filter(quote_q)
-        if is_shipper and user_company:
-            temp_quotes = temp_quotes.filter(Q(status='PENDING') | Q(priced_by_shipper_company=user_company))
-        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
-            temp_quotes = temp_quotes.filter(factory=user_company)
-        for qr in temp_quotes.distinct()[:5]: # Max 5 results
-            results.append({
-                'type': 'Teklif Talebi',
-                'text': f'Teklif Talebi: #{qr.pk} ({qr.get_status_display()})',
-                'url': reverse('ana_uygulama:quote_request_detail_nakliyeci_view' if is_shipper else 'ana_uygulama:quote_request_detail_fabrika_view', args=[qr.pk])
-            })
-
-        # Payment search
-        payment_q = (
-            Q(description__icontains=query) |
-            Q(amount__icontains=query) |
-            Q(invoice__invoice_number__icontains=query) |
-            Q(shipment__pk__icontains=query) |
-            Q(counterparty_company__name__icontains=query) |
-            Q(counterparty_name__icontains=query)
-        )
-        temp_payments = Payment.objects.filter(payment_q)
-        if is_shipper and user_company:
-            temp_payments = temp_payments.filter(shipper_company=user_company)
-        elif request.user.is_authenticated and user_company and user_company.company_type == 'FABRIKA':
-            temp_payments = temp_payments.filter(recorded_by_user__company=user_company, direction='OUTGOING') # Fabrika için sadece giden ödemeler
-        for p in temp_payments.distinct()[:5]: # Max 5 results
-            results.append({
-                'type': 'Ödeme/Tahsilat',
-                'text': f'Ödeme/Tahsilat: {p.get_direction_display()} {p.amount} TL', # get_direction_display eklendi
-                'url': reverse('ana_uygulama:payment_detail_nakliyeci_view' if is_shipper else 'ana_uygulama:payment_detail_fabrika_view', args=[p.pk])
-            })
-
-        # Bank Account search (for own company accounts only)
-        bank_accounts = BankAccount.objects.filter(
-            Q(bank_name__icontains=query) | Q(iban__icontains=query)
-        )
-        if user_company:
-            # BankAccount modelinde 'company' alanı yok, doğrudan 'carrier' üzerinden şirkete bağlanıyor.
-            # Dolayısıyla, banka hesabını kendi şirketine ait carrier'lar üzerinden filtrelemeliyiz.
-            if is_shipper and user_company:
-                bank_accounts = bank_accounts.filter(carrier__managed_by_shipper=user_company)
-            # Fabrika için banka hesabı listeleme views'ı olmadığı varsayımıyla şimdilik boş bırakılabilir.
-            else:
-                bank_accounts = BankAccount.objects.none() # Fabrikaların direkt banka hesapları yönetimi yoksa
-
-        for ba in bank_accounts.distinct()[:5]:
-            results.append({
-                'type': 'Banka Hesabı',
-                'text': f'Banka Hesabı: {ba.bank_name} - {ba.iban}',
-                'url': reverse('ana_uygulama:bank_account_detail_nakliyeci_view', args=[ba.pk]) # Nakliyeci banka hesabı detayına yönlendir
-            })
-
+        # More models can be added for similar searches.
 
     return JsonResponse({'results': results})
 
@@ -2460,7 +2308,7 @@ def company_user_create_fabrika_view(request):
             new_user.is_staff = False
             new_user.save()
             messages.success(request, f"Kullanıcı {new_user.username} başarıyla eklendi.")
-            return redirect('ana_uygulama:company_user_list_fabrika_view')
+            return redirect('ana_uygulama:company_user_list_fabrika')
         else:
             messages.error(request, "Lütfen formdaki hataları düzeltin.")
     else:
@@ -2483,14 +2331,13 @@ def company_user_update_fabrika_view(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, f"Kullanıcı {user_to_update.username} bilgileri başarıyla güncellendi.")
-            return redirect('ana_uygulama:company_user_list_fabrika_view')
+            return redirect('ana_uygulama:company_user_list_fabrika')
         else:
             messages.error(request, "Lütfen formdaki hataları düzeltin.")
     else:
         form = CompanyUserCreationForm(instance=user_to_update)
     context = {'form': form, 'page_title': "Şirket Kullanıcısını Güncelle"}
     return render(request, 'ana_uygulama/company_user_form.html', context)
-
 
 # Fabrika - Kullanıcı Silme
 @login_required
@@ -2505,7 +2352,7 @@ def company_user_delete_fabrika_view(request, pk):
     if request.method == 'POST':
         user_to_delete.delete()
         messages.success(request, f"Kullanıcı {user_to_delete.username} başarıyla silindi.")
-        return redirect('ana_uygulama:company_user_list_fabrika_view')
+        return redirect('ana_uygulama:company_user_list_fabrika')
     context = {'user_to_delete': user_to_delete, 'page_title': "Şirket Kullanıcısını Sil"}
     return render(request, 'ana_uygulama/company_user_confirm_delete.html', context)
 
@@ -2562,7 +2409,7 @@ def shipper_create_by_fabrika_view(request):
             try:
                 shipper_company.save()
                 messages.success(request, f"Nakliyeci '{shipper_company.full_name}' başarıyla eklendi.")
-                return redirect('ana_uygulama:company_list_for_fabrika_view')
+                return redirect('ana_uygulama:company_list_for_fabrika')
             except Exception as e:
                 messages.error(request, f"Nakliyeci eklenirken bir hata oluştu: {e}")
         else:
@@ -2576,210 +2423,8 @@ def shipper_create_by_fabrika_view(request):
     }
     return render(request, 'ana_uygulama/fabrika/shipper_create_form.html', context)
 
-
-# --- Fabrika - Ödemeler ---
-@login_required
-def payment_list_fabrika_view(request):
-    """
-    Fabrika için tüm ödeme kayıtlarını listeler.
-    Fabrika sadece OUTGOING (giden) ödemelerini görmeli.
-    """
-    if not request.user.company or request.user.company.company_type != 'FABRIKA':
-        messages.error(request, "Bu sayfaya erişim izniniz yok.")
-        return redirect('ana_uygulama:dashboard')
-
-    payments = Payment.objects.filter(
-        recorded_by_user__company=request.user.company,
-        direction='OUTGOING' # Fabrika sadece giden ödemelerini görmeli
-    ).order_by('-payment_date')
-    context = {'payments': payments, 'page_title': "Ödemelerim"}
-    return render(request, 'ana_uygulama/fabrika/payment_list.html', context)
-
-@login_required
-def payment_create_fabrika_view(request):
-    """
-    Fabrikanın yeni bir ödeme kaydı oluşturmasını sağlar (outgoing).
-    """
-    if not request.user.company or request.user.company.company_type != 'FABRIKA':
-        messages.error(request, "Bu sayfaya erişim izniniz yok.")
-        return redirect('ana_uygulama:dashboard')
-
-    if request.method == 'POST':
-        form = PaymentForm(request.POST, request_user=request.user) # user'ı forma ilettik
-        if form.is_valid():
-            payment = form.save(commit=False)
-            payment.recorded_by_user = request.user # Kaydı oluşturan kullanıcı
-            payment.direction = 'OUTGOING' # Fabrika için varsayılan olarak 'Giden'
-            payment.save()
-            messages.success(request, "Ödeme kaydı başarıyla oluşturuldu.")
-            return redirect('ana_uygulama:payment_list_fabrika_view')
-        else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
-    else:
-        form = PaymentForm(request_user=request.user) # user'ı forma ilettik
-    context = {'form': form, 'page_title': "Yeni Ödeme Kaydı Oluştur"}
-    return render(request, 'ana_uygulama/fabrika/payment_form.html', context)
-
-@login_required
-def payment_detail_fabrika_view(request, pk):
-    """
-    Fabrika için belirli bir ödeme kaydının detaylarını görüntüler.
-    """
-    payment = get_object_or_404(Payment, pk=pk, recorded_by_user__company=request.user.company, direction='OUTGOING')
-    context = {'payment': payment, 'page_title': f"Ödeme Detayı - {payment.pk}"}
-    return render(request, 'ana_uygulama/fabrika/payment_detail.html', context)
-
-
-@login_required
-def payment_update_fabrika_view(request, pk):
-    """
-    Fabrikanın mevcut bir ödeme kaydını güncellemesini sağlar.
-    """
-    payment = get_object_or_404(Payment, pk=pk, recorded_by_user__company=request.user.company, direction='OUTGOING')
-    if request.method == 'POST':
-        form = PaymentForm(request.POST, instance=payment, request_user=request.user)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Ödeme kaydı başarıyla güncellendi.")
-            return redirect('ana_uygulama:payment_list_fabrika_view')
-        else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
-    else:
-        form = PaymentForm(instance=payment, request_user=request.user)
-    context = {'form': form, 'page_title': "Ödeme Kaydını Güncelle"}
-    return render(request, 'ana_uygulama/fabrika/payment_form.html', context)
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def bank_account_list_nakliyeci_view(request):
-    """
-    Nakliyeci rolündeki kullanıcının kendi şirketine ait banka hesaplarını listeler.
-    """
-    # Sadece oturum açmış kullanıcının şirketine ait banka hesaplarını filtrele
-    bank_accounts = BankAccount.objects.filter(carrier__managed_by_shipper=request.user.company).order_by('-created_at')
-    context = {
-        'bank_accounts': bank_accounts,
-        'page_title': "Banka Hesaplarım"
-    }
-    # Not: Bu şablon yolu sizin projenizdeki gerçek şablon yoluna göre ayarlanmalıdır.
-    # Örneğin, ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_list.html
-    return render(request, 'ana_uygulama/nakliyeci/bank_account_list.html', context)
-
-@login_required
-def payment_delete_fabrika_view(request, pk):
-    """
-    Fabrikanın bir ödeme kaydını silmesini sağlar.
-    """
-    payment = get_object_or_404(Payment, pk=pk, recorded_by_user__company=request.user.company, direction='OUTGOING')
-    if request.method == 'POST':
-        payment.delete()
-        messages.success(request, "Ödeme kaydı başarıyla silindi.")
-        return redirect('ana_uygulama:payment_list_fabrika_view')
-    context = {'payment': payment, 'page_title': "Ödeme Kaydını Sil"}
-    return render(request, 'ana_uygulama/confirm_delete.html', context)
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def bank_account_create_nakliyeci_view(request):
-    """
-    Nakliyeci rolündeki kullanıcının kendi şirketi için yeni bir banka hesabı oluşturmasını sağlar.
-    """
-    if request.method == 'POST':
-        form = BankAccountForm(request.POST) # request_user'ı burada geçirmeye gerek yok
-        if form.is_valid():
-            bank_account = form.save(commit=False)
-            # BankAccount modelinde 'company' alanı yok, bu yüzden carrier üzerinden atamalıyız
-            # Formdan carrier seçildiğini varsayıyorum, aksi takdirde burası değişmeli
-            # Eğer BankAccount doğrudan Company'ye bağlı olacaksa models.py'yi düzeltmeliyiz.
-            # Şu anki models.py'ye göre BankAccount, Carrier'a bağlı.
-            # Dolayısıyla, banka hesabı oluşturulurken hangi taşıyıcıya ait olduğu belirtilmelidir.
-            # Bu fonksiyon 'nakliyeci/banka-hesaplari/yeni/' URL'si ile çalışıyor ve bir carrier_id almadığı için
-            # doğrudan Nakliyeci şirketinin banka hesabı olarak değil, onun yönettiği taşıyıcının banka hesabı olarak düşünülmeli.
-            # Eğer Nakliyeci'nin kendi şirketinin banka hesabı olacaksa models.py'ye Company'ye ForeignKey eklenmeli.
-            # Varsayım: Bu form, Nakliyeci'nin kendi şirketi için genel bir banka hesabı eklemesidir.
-            # Eğer bu BankAccount, doğrudan Nakliyeci firmasına ait olacaksa, Model.py'de `company = models.ForeignKey(Company...)` eklenmeli.
-            # Şu anki models.py'ye göre bu mümkün değil.
-            messages.error(request, "Banka hesabı doğrudan nakliyeci firmaya atanamaz. Lütfen bir taşıyıcıya atayın.")
-            return redirect('ana_uygulama:bank_account_list_nakliyeci_view') # Hata ile geri yönlendir
-
-        else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
-    else:
-        form = BankAccountForm() # GET isteği için formu hazırla
-    context = {'form': form, 'page_title': "Yeni Banka Hesabı Oluştur"}
-    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_form.html
-    return render(request, 'ana_uygulama/nakliyeci/bank_account_form.html', context)
-
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def bank_account_detail_nakliyeci_view(request, pk):
-    """
-    Nakliyeci rolündeki kullanıcının kendi şirketine ait belirli bir banka hesabının detaylarını görüntüler.
-    """
-    # Sadece kullanıcının şirketi tarafından yönetilen taşıyıcılara ait banka hesaplarını getir
-    bank_account = get_object_or_404(BankAccount, pk=pk, carrier__managed_by_shipper=request.user.company)
-    context = {
-        'bank_account': bank_account,
-        'page_title': "Banka Hesabı Detayları"
-    }
-    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_detail.html
-    return render(request, 'ana_uygulama/nakliyeci/bank_account_detail.html', context)
-
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def bank_account_update_nakliyeci_view(request, pk):
-    """
-    Nakliyeci rolündeki kullanıcının kendi şirketine ait mevcut bir banka hesabını günceller.
-    """
-    bank_account = get_object_or_404(BankAccount, pk=pk, carrier__managed_by_shipper=request.user.company)
-    if request.method == 'POST':
-        form = BankAccountForm(request.POST, instance=bank_account) # request_user'ı burada geçirmeye gerek yok
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Banka hesabı başarıyla güncellendi.")
-            return redirect('ana_uygulama:bank_account_list_nakliyeci_view') # Liste sayfasına yönlendir
-        else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
-    else:
-        form = BankAccountForm(instance=bank_account)
-    context = {'form': form, 'page_title': "Banka Hesabını Güncelle"}
-    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_form.html (oluşturma formu ile aynı olabilir)
-    return render(request, 'ana_uygulama/nakliyeci/bank_account_form.html', context)
-
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def bank_account_delete_nakliyeci_view(request, pk):
-    """
-    Nakliyeci rolündeki kullanıcının kendi şirketine ait bir banka hesabını silmesini sağlar.
-    """
-    bank_account = get_object_or_404(BankAccount, pk=pk, carrier__managed_by_shipper=request.user.company)
-    if request.method == 'POST':
-        bank_account.delete()
-        messages.success(request, "Banka hesabı başarıyla silindi.")
-        return redirect('ana_uygulama:bank_account_list_nakliyeci_view') # Liste sayfasına yönlendir
-    context = {
-        'bank_account': bank_account,
-        'page_title': "Banka Hesabını Sil",
-        'object_name': bank_account.bank_name # Silinecek objenin adını şablonda kullanmak için
-    }
-    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_confirm_delete.html
-    return render(request, 'ana_uygulama/nakliyeci/bank_account_confirm_delete.html', context)
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def company_list_for_nakliyeci_view(request):
-    """
-    Nakliyeci rolündeki kullanıcının çalışabileceği aktif Fabrika firmalarını listeler.
-    """
-    # Sadece aktif ve 'FABRIKA' tipindeki firmaları listele
-    factories = Company.objects.filter(company_type='FABRIKA', is_active=True).order_by('name')
-    context = {
-        'companies': factories,
-        'page_title': "Çalıştığım/Potansiyel Fabrikalar"
-    }
-    # Not: Bu şablon yolu sizin projenizdeki gerçek şablon yoluna göre ayarlanmalıdır.
-    # Örneğin, ana_uygulama/templates/ana_uygulama/nakliyeci/company_list.html
-    return render(request, 'ana_uygulama/nakliyeci/company_list.html', context)
+# --- Kimlik Doğrulama Görünümleri ---
+def logout_view(request):
+    logout(request)
+    messages.info(request, "Başarıyla çıkış yaptınız.")
+    return redirect(settings.LOGIN_URL)

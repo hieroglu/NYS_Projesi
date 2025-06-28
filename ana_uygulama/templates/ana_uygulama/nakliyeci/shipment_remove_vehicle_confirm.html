@@ -1,0 +1,43 @@
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/shipment_remove_vehicle_confirm.html #}
+{% extends "base.html" %}
+{% load static %}
+
+{% block page_title %}{{ page_title }}{% endblock page_title %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-car-crash"></i> {{ page_title }}</h1>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            <div class="card shadow mb-4 animated fadeIn">
+                <div class="card-header py-3 bg-warning text-white rounded-top">
+                    <h6 class="m-0 font-weight-bold"><i class="fas fa-exclamation-triangle"></i> Onay Gerekiyor</h6>
+                </div>
+                <div class="card-body">
+                    <p class="lead text-center mb-4">
+                        Sevkiyat <strong><span class="text-primary">#{{ shipment.tracking_number }}</span></strong> üzerindeki atanan aracı kaldırmak istediğinizden emin misiniz?
+                    </p>
+                    <p class="text-muted text-center">
+                        Bu işlem, sevkiyatın artık bir araca bağlı olmayacağı anlamına gelir. İşlem geri alınamaz.
+                    </p>
+
+                    <hr>
+
+                    <form method="post" class="d-flex justify-content-center mt-4">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger btn-lg me-3 shadow-sm">
+                            <i class="fas fa-minus-circle me-2"></i> Evet, Aracı Kaldır
+                        </button>
+                        <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci_view' shipment.pk %}" class="btn btn-secondary btn-lg shadow-sm">
+                            <i class="fas fa-times me-2"></i> Vazgeç
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

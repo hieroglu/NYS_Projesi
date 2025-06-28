@@ -198,13 +198,13 @@ class Vehicle(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def is_inspection_expired(self):
-        """Muayene tarihinin geçip geçmediğini kontrol eder."""
+        """Checks if the inspection date has passed."""
         if not self.inspection_expiry_date:
             return False
         return self.inspection_expiry_date < timezone.now().date()
 
     def is_insurance_expired(self):
-        """Sigorta tarihinin geçip geçmediğini kontrol eder."""
+        """Checks if the insurance date has passed."""
         if not self.insurance_expiry_date:
             return False
         return self.insurance_expiry_date < timezone.now().date()
@@ -218,7 +218,7 @@ class Vehicle(models.Model):
         ordering = ['plate_number']
 
     def get_managing_shipper(self):
-        """Bu aracı yöneten nakliyeci firmayı döndürür."""
+        """Returns the shipper company managing this vehicle."""
         if self.carrier:
             return self.carrier.managed_by_shipper
         return None
@@ -347,14 +347,14 @@ class Shipment(models.Model):
 
     @property
     def kar_tutari(self):
-        """Sevkiyatın net karını hesaplar."""
+        """Calculates the net profit of the shipment."""
         if self.price_for_factory is not None and self.cost_for_shipper is not None:
             return self.price_for_factory - self.cost_for_shipper
         return Decimal('0.00')
 
     @property
     def kar_orani(self):
-        """Sevkiyatın kar oranını yüzde olarak hesaplar."""
+        """Calculates the profit margin of the shipment as a percentage."""
         if self.price_for_factory and self.price_for_factory > 0 and self.cost_for_shipper is not None:
             kar = self.price_for_factory - self.cost_for_shipper
             return (kar / self.price_for_factory) * Decimal('100')
@@ -477,7 +477,7 @@ class Invoice(models.Model):
         if related_shipment and related_shipment.status == 'BILLED':
             related_shipment.status = 'DELIVERED' # Sevkiyatı 'Teslim Edildi' durumuna geri döndür
             related_shipment.save()
-            print(f"Fatura silindi: Sevkiyat ID {related_shipment.pk} durumu 'DELIVERED' olarak güncellendi.")
+            print(f"Invoice deleted: Shipment ID {related_shipment.pk} status updated to 'DELIVERED'.")
 
     def get_status_display(self):
         return dict(self.STATUS_CHOICES).get(self.status, self.status)
@@ -518,9 +518,9 @@ class Payment(models.Model):
     @property
     def status(self):
         """
-        Ödemenin durumunu belirler.
-        Faturayla ilişkiliyse faturanın durumu ve ödeme miktarına göre belirlenir.
-        İlişkili fatura yoksa genellikle 'Ödendi' kabul edilebilir.
+        Determines the payment status.
+        If linked to an invoice, determined by invoice status and amount.
+        If no associated invoice, it is generally considered 'Paid'.
         """
         if self.invoice:
             if self.amount >= self.invoice.total_amount:
@@ -536,7 +536,7 @@ class Payment(models.Model):
 
     def get_status_display(self):
         """
-        status property'sinin döndürdüğü kodlara karşılık gelen okunabilir metni verir.
+        Returns a readable text corresponding to the codes returned by the status property.
         """
         status_map = {
             'ODENDI': 'Ödendi',
