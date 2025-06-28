@@ -1,147 +1,149 @@
-{# ana_uygulama/templates/ana_uygulama/nakliyeci/shipment_detail.html #}
+{# ana_uygulama/templates/ana_uygulama/nakliyeci/shipment_detail_nakliyeci.html #}
 {% extends "base.html" %}
 {% load static %}
+{% load humanize %} {# Sayıları formatlamak için (örn: 1.000 TL) #}
 
-{% block page_title %}{{ page_title }}{% endblock page_title %}
+{% block page_title %}Sevkiyat Detayı{% endblock page_title %}
 
 {% block content %}
-<div class="card shadow-sm">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h4 class="mb-0">{{ page_title }}</h4>
-        <div class="actions">
-            {# "İşi Düzenle" butonu: Fatura kesilmemiş ve iptal edilmemişse göster #}
-            {% if shipment.status != 'BILLED' and shipment.status != 'CANCELLED' %}
-                <a href="{% url 'ana_uygulama:shipment_update_nakliyeci' shipment_id=shipment.id %}" class="btn btn-warning btn-sm">
-                    <i class="fas fa-edit"></i> İşi Düzenle
-                </a>
-            {% endif %}
-            {# "İşi Sil" butonu: Belirli durumlar haricinde göster #}
-            {% if shipment.status not in 'BILLED,IN_TRANSIT,DELIVERED,COMPLETED' and shipment.status != 'CANCELLED' %} {# Hata burada düzeltildi #}
-                <a href="{% url 'ana_uygulama:shipment_delete_nakliyeci' shipment_id=shipment.id %}" class="btn btn-danger btn-sm">
-                    <i class="fas fa-trash"></i> İşi Sil
-                </a>
-            {% endif %}
-            <a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}" class="btn btn-secondary btn-sm">
-                <i class="fas fa-arrow-left"></i> İşlere Geri Dön
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0 text-gray-800">Sevkiyat Detayı - #{{ shipment.tracking_number }}</h1>
+        <div class="btn-group" role="group" aria-label="Sevkiyat İşlemleri">
+            {% if shipment.status != 'DELIVERED' and shipment.status != 'COMPLETED' and shipment.status != 'CANCELLED' %}
+            <a href="{% url 'ana_uygulama:shipment_update_nakliyeci_view' shipment.id %}" class="btn btn-warning btn-sm">
+                <i class="fas fa-edit"></i> İşi Düzenle
             </a>
+            <a href="{% url 'ana_uygulama:assign_vehicle_to_shipment_view' shipment.id %}" class="btn btn-primary btn-sm">
+                <i class="fas fa-truck"></i> Araç Ata
+            </a>
+            <a href="{% url 'ana_uygulama:update_shipment_status_nakliyeci_view' shipment.id %}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-sync-alt"></i> Durum Güncelle
+            </a>
+            {% endif %}
+            {% if not shipment.invoice_set.exists and shipment.status == 'DELIVERED' %}
+            <a href="{% url 'ana_uygulama:invoice_create_from_shipment_nakliyeci_view' shipment.id %}" class="btn btn-success btn-sm">
+                <i class="fas fa-file-invoice"></i> Fatura Oluştur
+            </a>
+            {% endif %}
+            {% if shipment.status != 'COMPLETED' and shipment.status != 'CANCELLED' %}
+            <a href="{% url 'ana_uygulama:shipment_delete_nakliyeci_view' shipment.id %}" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash"></i> İşi Sil
+            </a>
+            {% endif %}
         </div>
     </div>
-    <div class="card-body">
-        {% include 'ana_uygulama/includes/messages.html' %}
 
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Sevkiyat ID:</strong> {{ shipment.pk }}</div>
-            <div class="col-md-6"><strong>Müşteri Fabrika:</strong> {{ shipment.factory.name }}</div>
+    {% include 'ana_uygulama/includes/messages.html' %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Sevkiyat Bilgileri</h6>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Takip Numarası:</dt>
+                        <dd class="col-sm-8">{{ shipment.tracking_number }}</dd>
+
+                        <dt class="col-sm-4">Fabrika:</dt>
+                        <dd class="col-sm-8">{{ shipment.factory.name }}</dd>
+
+                        <dt class="col-sm-4">Yük Tipi:</dt>
+                        <dd class="col-sm-8">{{ shipment.cargo_type }}</dd>
+
+                        <dt class="col-sm-4">Yükleme Yeri:</dt>
+                        <dd class="col-sm-8">{{ shipment.origin }}</dd>
+
+                        <dt class="col-sm-4">Teslimat Yeri:</dt>
+                        <dd class="col-sm-8">{{ shipment.destination }}</dd>
+
+                        <dt class="col-sm-4">Yükleme Tarihi:</dt>
+                        <dd class="col-sm-8">{{ shipment.pickup_date|date:"d M Y" }}</dd>
+
+                        <dt class="col-sm-4">Teslimat Tarihi:</dt>
+                        <dd class="col-sm-8">{% if shipment.delivery_date %}{{ shipment.delivery_date|date:"d M Y" }}{% else %}Belirtilmemiş{% endif %}</dd>
+
+                        <dt class="col-sm-4">Mesafe (KM):</dt>
+                        <dd class="col-sm-8">{% if shipment.distance_km %}{{ shipment.distance_km|intcomma }} KM{% else %}Belirtilmemiş{% endif %}</dd>
+
+                        <dt class="col-sm-4">Ağırlık (Ton):</dt>
+                        <dd class="col-sm-8">{% if shipment.weight_tons %}{{ shipment.weight_tons|intcomma }} Ton{% else %}Belirtilmemiş{% endif %}</dd>
+
+                        <dt class="col-sm-4">Fiyat:</dt>
+                        <dd class="col-sm-8">{% if shipment.price %}{{ shipment.price|intcomma }} TL{% else %}Belirtilmemiş{% endif %}</dd>
+
+                        <dt class="col-sm-4">Atanan Araç:</dt>
+                        <dd class="col-sm-8">
+                            {% if shipment.assigned_vehicle %}
+                                <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci_view' shipment.assigned_vehicle.id %}" class="text-primary text-decoration-none">
+                                    {{ shipment.assigned_vehicle.plate_number }} ({{ shipment.assigned_vehicle.brand }} {{ shipment.assigned_vehicle.model }})
+                                </a>
+                            {% else %}
+                                Atanmadı
+                                {% if shipment.status == 'ASSIGNED' %} {# Already assigned but vehicle link might be broken #}
+                                {% else %}
+                                    <a href="{% url 'ana_uygulama:assign_vehicle_to_shipment_view' shipment.id %}" class="btn btn-sm btn-outline-primary ms-2">Araç Ata</a>
+                                {% endif %}
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4">Atanan Şoför:</dt>
+                        <dd class="col-sm-8">
+                            {% if shipment.assigned_driver %}
+                                {{ shipment.assigned_driver.first_name }} {{ shipment.assigned_driver.last_name }} ({{ shipment.assigned_driver.username }})
+                            {% else %}
+                                Atanmadı
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4">Durum:</dt>
+                        <dd class="col-sm-8">
+                            <span class="badge {% if shipment.status == 'PENDING' %}badge-pending{% elif shipment.status == 'ASSIGNED' %}badge-assigned{% elif shipment.status == 'IN_TRANSIT' %}badge-in-transit{% elif shipment.status == 'DELIVERED' %}badge-delivered{% elif shipment.status == 'COMPLETED' %}badge-completed{% elif shipment.status == 'CANCELLED' %}badge-danger{% endif %}">
+                                {{ shipment.get_status_display }}
+                            </span>
+                        </dd>
+
+                        <dt class="col-sm-4">Oluşturulma Tarihi:</dt>
+                        <dd class="col-sm-8">{{ shipment.created_at|date:"d M Y H:i" }}</dd>
+
+                        <dt class="col-sm-4">Son Güncelleme:</dt>
+                        <dd class="col-sm-8">{{ shipment.updated_at|date:"d M Y H:i" }}</dd>
+                    </dl>
+                </div>
+            </div>
         </div>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Yükleme Yeri:</strong> {{ shipment.origin }}</div>
-            <div class="col-md-6"><strong>Teslimat Yeri:</strong> {{ shipment.destination }}</div>
-        </div>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Yükleme Tarihi:</strong> {{ shipment.pickup_date|date:"d M Y" }}</div>
-            <div class="col-md-6"><strong>Teslim Tarihi:</strong> {% if shipment.delivery_date %}{{ shipment.delivery_date|date:"d M Y" }}{% else %}Belirtilmedi{% endif %}</div>
-        </div>
-        <div class="row mb-3">
-            <div class="col-md-12"><strong>Yük Açıklaması:</strong> {{ shipment.load_description }}</div>
-        </div>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Faturamdaki Tutar:</strong> {% if shipment.price_for_factory %}{{ shipment.price_for_factory|floatformat:2 }} TL{% else %}Belirtilmedi{% endif %}</div>
-            <div class="col-md-6"><strong>Nakliyeciye Maliyet:</strong> {% if shipment.cost_for_shipper %}{{ shipment.cost_for_shipper|floatformat:2 }} TL{% else %}Belirtilmedi{% endif %}</div>
-        </div>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Kâr Tutarı:</strong> {% if shipment.kar_tutari is not None %}{{ shipment.kar_tutari|floatformat:2 }} TL{% else %}Hesaplanamadı{% endif %}</div>
-            <div class="col-md-6"><strong>Atanan Araç:</strong>
-                {% if shipment.assigned_vehicle %}
-                    <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci' vehicle_id=shipment.assigned_vehicle.pk %}">{{ shipment.assigned_vehicle.plate_number }}</a>
-                    {% if shipment.assigned_vehicle.inspection_expiry_date and shipment.assigned_vehicle.inspection_expiry_date < today %}
-                        <span class="badge bg-danger ms-1" data-bs-toggle="tooltip" title="Muayene Süresi Doldu"><i class="fas fa-exclamation-triangle"></i></span>
-                    {% elif shipment.assigned_vehicle.inspection_expiry_date and shipment.assigned_vehicle.inspection_expiry_date <= thirty_days_later %}
-                        <span class="badge bg-warning ms-1" data-bs-toggle="tooltip" title="Muayene Süresi Yaklaşıyor"><i class="fas fa-exclamation-circle"></i></span>
+
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">İlgili Faturalar</h6>
+                </div>
+                <div class="card-body">
+                    {% if shipment.invoice_set.all %}
+                        <ul class="list-group">
+                            {% for invoice in shipment.invoice_set.all %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Fatura #{{ invoice.invoice_number }}
+                                <span class="badge {% if invoice.status == 'PAID' %}badge-paid{% elif invoice.status == 'SENT' %}badge-waiting{% elif invoice.status == 'PARTIALLY_PAID' %}badge-partial{% elif invoice.status == 'VOID' %}badge-danger{% endif %}">
+                                    {{ invoice.get_status_display }}
+                                </span>
+                                <a href="{% url 'ana_uygulama:invoice_detail_nakliyeci_view' invoice.id %}" class="btn btn-info btn-sm">Detay</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="alert alert-info" role="alert">
+                            Bu sevkiyat için henüz fatura oluşturulmamıştır.
+                            {% if shipment.status == 'DELIVERED' %}
+                            <br><a href="{% url 'ana_uygulama:invoice_create_from_shipment_nakliyeci_view' shipment.id %}" class="btn btn-success btn-sm mt-2">Fatura Oluştur</a>
+                            {% endif %}
+                        </div>
                     {% endif %}
-                    {% if shipment.assigned_vehicle.insurance_expiry_date and shipment.assigned_vehicle.insurance_expiry_date < today %}
-                        <span class="badge bg-danger ms-1" data-bs-toggle="tooltip" title="Sigorta Süresi Doldu"><i class="fas fa-shield-alt"></i></span>
-                    {% elif shipment.assigned_vehicle.insurance_expiry_date and shipment.assigned_vehicle.insurance_expiry_date <= thirty_days_later %}
-                        <span class="badge bg-warning ms-1" data-bs-toggle="tooltip" title="Sigorta Süresi Yaklaşıyor"><i class="fas fa-shield-alt"></i></span>
-                    {% endif %}
-                {% else %}
-                    <span class="text-muted">Atanmamış</span>
-                {% endif %}
+                </div>
             </div>
         </div>
-        <div class="row mb-3">
-            <div class="col-md-6"><strong>Mevcut Durum:</strong>
-                {% if shipment.status == 'PENDING_ASSIGNMENT' %}
-                    <span class="badge bg-info">{{ shipment.get_status_display }}</span>
-                {% elif shipment.status == 'ASSIGNED' %}
-                    <span class="badge bg-primary">{{ shipment.get_status_display }}</span>
-                {% elif shipment.status == 'IN_TRANSIT' %}
-                    <span class="badge bg-warning">{{ shipment.get_status_display }}</span>
-                {% elif shipment.status == 'DELIVERED' %}
-                    <span class="badge bg-success">{{ shipment.get_status_display }}</span>
-                {% elif shipment.status == 'BILLED' %}
-                    <span class="badge bg-secondary">{{ shipment.get_status_display }}</span>
-                {% elif shipment.status == 'CANCELLED' %}
-                    <span class="badge bg-danger">{{ shipment.get_status_display }}</span>
-                {% else %}
-                    <span class="badge bg-secondary">{{ shipment.get_status_display }}</span>
-                {% endif %}
-            </div>
-            <div class="col-md-6"><strong>Oluşturma Tarihi:</strong> {{ shipment.created_at|date:"d M Y H:i" }}</div>
-        </div>
-
-        <hr>
-
-        {# Durum Güncelleme Formu #}
-        {% if shipment.status != 'BILLED' and shipment.status != 'CANCELLED' %}
-        <h5 class="mt-4 mb-3">Durum Güncelleme</h5>
-        <form action="{% url 'ana_uygulama:update_shipment_status_nakliyeci' shipment_id=shipment.id %}" method="post" class="row g-3 align-items-end">
-            {% csrf_token %}
-            <div class="col-md-4">
-                <label for="{{ status_update_form.status.id_for_label }}" class="form-label">Yeni Durum</label>
-                {{ status_update_form.status }}
-                {% for error in status_update_form.status.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-            <br></br>
-                <center>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-sync-alt"></i> Durumu Güncelle
-                </button>
-                </center>
-            </div>
-            
-        </form>
-        {% endif %}
-
-        <hr>
-
-        {# Araç Atama/Değiştirme Butonu #}
-        {% if shipment.status == 'PENDING_ASSIGNMENT' or shipment.status == 'ASSIGNED' %}
-            <h5 class="mt-4 mb-3">Araç Atama</h5>
-            <a href="{% url 'ana_uygulama:assign_vehicle_to_shipment' shipment_id=shipment.id %}" class="btn btn-warning btn-lg">
-                <i class="fas fa-truck-pickup"></i> Araç Ata/Değiştir
-            </a>
-        {% endif %}
-
-        {# Fatura Oluşturma Butonu (Sadece 'Teslim Edildi' durumunda ve faturası yoksa) #}
-        {% if not shipment.invoice_set.exists and shipment.status == 'DELIVERED' %}
-            <h5 class="mt-4 mb-3">Fatura Oluştur</h5>
-            <a href="{% url 'ana_uygulama:invoice_create' shipment_id=shipment.id %}" class="btn btn-success btn-lg">
-                <i class="fas fa-file-invoice-dollar"></i> Fatura Oluştur
-            </a>
-        {% endif %}
-
     </div>
 </div>
 {% endblock content %}
-
-{# jQuery ve Bootstrap JS'i özel komut dosyalarınızdan önce yükleyin #}
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" xintegrity="sha384-I7E8VVD/ismYTFyN+uQZ/Ltrj0D9PmnhjS7zRBhXp+L+FN8yI+3j+nK8s9g5wYh4" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js" xintegrity="sha384-0pUGZvbkm6XF6gxjEnlco4nvBwDAwbgfmJKBCddhYlFbcM7ChtjKK9up/pQACGyK" crossorigin="anonymous"></script>
-
-{% block extra_scripts %}
-<script>
-    $(function () {
-        $('[data-bs-toggle="tooltip"]').tooltip();
-    });
-</script>
-{% endblock extra_scripts %}

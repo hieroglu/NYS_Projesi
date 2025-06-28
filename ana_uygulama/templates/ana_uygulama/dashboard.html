@@ -495,7 +495,7 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="{% url 'ana_uygulama:quote_request_detail_nakliyeci_view' item.id %}" class="btn btn-sm btn-outline-primary">Detay</a>
+                                        <a href="{% url 'ana_uygulama:quote_request_detail_nakliyeci' item.id %}" class="btn btn-sm btn-outline-primary">Detay</a>
                                         {% if item.status == 'PENDING' %}
                                         <a href="{% url 'ana_uygulama:create_quote_for_request_view' item.id %}" class="btn btn-sm btn-success">Fiyat Ver</a>
                                         {% elif item.status == 'QUOTED' and item.priced_by_shipper_company == request.user.company %}
