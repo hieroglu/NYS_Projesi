@@ -466,6 +466,7 @@ class Invoice(models.Model):
 
         self.total_vat_amount = net_amount_for_calc * vat_rate_decimal
         self.total_amount = net_amount_for_calc + self.total_vat_amount
+        self.update_status_based_on_payments()
 
         super().save(*args, **kwargs)
 
@@ -496,21 +497,21 @@ class Invoice(models.Model):
 
         total_paid_amount = self.payment_set.filter(direction='INCOMING').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
 
-        if self.total_amount is None:
-            # If total_amount is not set (e.g., draft invoice without full calculation),
-            # default to SENT or DRAFT based on current status.
-            if self.status not in ['PAID', 'PARTIALLY_PAID', 'VOID']:
-                self.status = 'DRAFT' if self.status == 'DRAFT' else 'SENT'
-        elif total_paid_amount >= self.total_amount:
+        if total_paid_amount >= self.total_amount:
             self.status = 'PAID'
-        elif total_paid_amount > 0 and total_paid_amount < self.total_amount:
+            return # İşlem tamamlandı, fonksiyondan çık.
+
+        if total_paid_amount > 0:
             self.status = 'PARTIALLY_PAID'
-        elif self.due_date < timezone.localdate() and total_paid_amount == 0:
+            return # İşlem tamamlandı, fonksiyondan çık.
+
+    # Eğer buraya kadar geldiysek, hiç ödeme yapılmamış demektir.
+    # Şimdi vadesinin geçip geçmediğini kontrol edelim.
+        if self.due_date and self.due_date < timezone.localdate():
             self.status = 'OVERDUE'
         else:
-            self.status = 'SENT' # Default status if not fully paid, partially paid, or overdue
-
-        self.save(update_fields=['status']) # Only save the status field
+        # Vadesi geçmemiş ve ödeme yapılmamışsa, durumu 'Gönderildi'dir.
+            self.status = 'SENT'
 
 
 # 9. Payment (Ödeme/Tahsilat) Modeli

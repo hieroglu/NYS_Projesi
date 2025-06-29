@@ -1,7 +1,6 @@
 # ana_uygulama/views.py
 import calendar
 import json
-from django import forms
 from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -13,7 +12,7 @@ from datetime import date, timedelta
 from django.db.models import Sum, F, Q
 from django.urls import reverse
 from django.db.models.functions import TruncMonth # Ay bazında gruplama için
-
+from django.http import JsonResponse
 
 # Model imports
 from .models import (
@@ -281,103 +280,6 @@ def dashboard_view(request):
 
     return render(request, 'ana_uygulama/dashboard.html', context)
 
-
-def user_company_type_required(company_type):
-    """
-    Decorator that checks if the logged-in user's company type matches the required type.
-    Redirects to login if not authenticated, or to dashboard if not authorized.
-    """
-    def decorator(view_func):
-        def wrapper(request, *args, **kwargs):
-            if not request.user.is_authenticated:
-                messages.error(request, "Bu sayfaya erişim için giriş yapmalısınız.")
-                return redirect('ana_uygulama:login')
-            # Ensure the user has a company assigned and it matches the required type
-            if not hasattr(request.user, 'company') or not request.user.company or request.user.company.company_type != company_type:
-                messages.error(request, f"Bu sayfaya erişim yetkiniz yok. Sadece '{company_type}' firmaları erişebilir.")
-                return redirect('ana_uygulama:dashboard')
-            return view_func(request, *args, **kwargs)
-        return wrapper
-    return decorator
-
-
-# Diğer görünümleriniz buraya gelebilir...
-# Örneğin: dashboard_view, quote_request_list_nakliyeci_view vb.
-
-# Sevkiyatlar (İşler) - Nakliyeci Rolü İçin
-@login_required
-@user_company_type_required('NAKLIYECI')
-def shipment_remove_vehicle_nakliyeci_view(request, pk):
-    """
-    Allows a shipper user to remove an assigned vehicle from a specific shipment.
-    Ensures that the shipment belongs to the user's company.
-    """
-    # Get the shipment object, ensuring it belongs to the logged-in user's company
-    shipment = get_object_or_404(Shipment, pk=pk, shipper_company=request.user.company)
-
-    if request.method == 'POST':
-        # Logic to remove the assigned vehicle
-        shipment.assigned_vehicle = None # Set the assigned_vehicle field to None
-        shipment.save() # Save the changes to the database
-        messages.success(request, f"Sevkiyat '{shipment.tracking_number}' üzerindeki araç başarıyla kaldırıldı.")
-        # Redirect to the shipment detail page after successful removal
-        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', pk=pk)
-    
-    # If it's a GET request, render the confirmation page
-    context = {
-        'shipment': shipment,
-        'page_title': "Araç Kaldır",
-        'object_name': shipment.tracking_number # Shipment tracking number for display in the template
-    }
-    # Render the confirmation template
-    # The path assumes your templates are structured as ana_uygulama/templates/ana_uygulama/nakliyeci/
-    return render(request, 'ana_uygulama/nakliyeci/shipment_remove_vehicle_confirm.html', context)
-
-def user_company_type_required(company_type):
-    """
-    Decorator that checks if the logged-in user's company type matches the required type.
-    Redirects to login if not authenticated, or to dashboard if not authorized.
-    """
-    def decorator(view_func):
-        def wrapper(request, *args, **kwargs):
-            if not request.user.is_authenticated:
-                messages.error(request, "Bu sayfaya erişim için giriş yapmalısınız.")
-                return redirect('ana_uygulama:login')
-            if not hasattr(request.user, 'company') or not request.user.company or request.user.company.company_type != company_type:
-                messages.error(request, f"Bu sayfaya erişim yetkiniz yok. Sadece '{company_type}' firmaları erişebilir.")
-                return redirect('ana_uygulama:dashboard')
-            return view_func(request, *args, **kwargs)
-        return wrapper
-    return decorator
-
-
-# ... (Diğer view fonksiyonlarınız) ...
-
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def vehicle_create_nakliyeci_view(request):
-    """
-    Allows a shipper (NAKLIYECI) user to add a new vehicle to their company.
-    """
-    if request.method == 'POST':
-        form = VehicleForm(request.POST)
-        if form.is_valid():
-            vehicle = form.save(commit=False)
-            vehicle.company = request.user.company # Assign the vehicle to the logged-in user's company
-            vehicle.save()
-            messages.success(request, f"Araç '{vehicle.plate_number}' başarıyla eklendi.")
-            return redirect('ana_uygulama:vehicle_list_nakliyeci_view') # Redirect to vehicle list
-        else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
-    else:
-        form = VehicleForm() # Instantiate an empty form for GET request
-
-    context = {
-        'form': form,
-        'page_title': "Yeni Araç Ekle"
-    }
-    return render(request, 'ana_uygulama/nakliyeci/vehicle_form.html', context) # Render the form template
 
 # === Shipper Views ===
 
@@ -826,7 +728,7 @@ def assign_vehicle_to_shipment_view(request, shipment_id):
                 
                 # Check for vehicle warnings before assignment
                 warning_messages = []
-                if selected_vehicle and selected_vehicle.is_inspection_expired():
+                if selected_vehicle.is_inspection_expired():
                     warning_messages.append(f"{selected_vehicle.plate_number} muayenesi SÜRESİ DOLDU.")
                 elif selected_vehicle.inspection_expiry_date and selected_vehicle.inspection_expiry_date < (timezone.now().date() + timedelta(days=7)):
                     warning_messages.append(f"{selected_vehicle.plate_number} muayenesi YAKLAŞIYOR.")
@@ -1378,78 +1280,23 @@ def invoice_mark_as_paid_nakliyeci_view(request, invoice_id):
 
 
 @login_required
-@user_company_type_required('NAKLIYECI')
 def invoice_detail_nakliyeci_view(request, pk):
-    if request.method == 'POST':
-        payment_form = PaymentForm(request.POST, user=request.user)  # Burada user parametresini iletiyoruz
-        # Diğer işlemler...
-    else:
-        payment_form = PaymentForm(user=request.user)  # GET isteği için de user parametresini iletiyoruz
-    invoice = get_object_or_404(Invoice, pk=pk, issued_by_shipper=request.user.company)
-    payments = invoice.payment_set.all().order_by('-payment_date') # İlgili ödemeleri çek
+    """
+    Displays the details of a specific invoice for the shipper role.
+    """
+    invoice = get_object_or_404(Invoice, pk=pk)
 
-    # Faturanın toplam ödenen tutarını hesapla
-    total_paid = payments.filter(direction='INCOMING').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
-    remaining_balance = invoice.total_amount - total_paid
-
-    if request.method == 'POST':
-        # Ödeme formu gönderilmişse
-        payment_form = PaymentForm(request.POST, user=request.user)
-        if payment_form.is_valid():
-            payment = payment_form.save(commit=False)
-            payment.invoice = invoice # Oluşturulan ödemeyi bu faturaya bağla
-            payment.shipper_company = request.user.company # Ödemeyi yapan nakliyeci firma
-            payment.direction = 'INCOMING' # Bu fatura için ödeme, nakliyeciye GİRİŞ (tahsilat) demektir.
-            payment.recorded_by_user = request.user # Kaydeden kullanıcı
-
-            # Eğer karşı taraf firma seçilmemişse, faturanın kesildiği fabrika otomatik olarak atanır.
-            if not payment.counterparty_company and invoice.billed_to_factory:
-                payment.counterparty_company = invoice.billed_to_factory
-            # Eğer karşı taraf adı girilmemişse, faturanın kesildiği fabrika adı otomatik olarak atanır.
-            if not payment.counterparty_name and invoice.billed_to_factory:
-                 payment.counterparty_name = invoice.billed_to_factory.name
-
-            payment.save()
-            messages.success(request, "Ödeme başarıyla kaydedildi.")
-            return redirect('ana_uygulama:invoice_detail_nakliyeci_view', pk=invoice.pk)
-        else:
-            messages.error(request, "Ödeme kaydedilirken bir hata oluştu. Lütfen form hatalarını kontrol edin.")
-            # Form geçersizse, mevcut ödemeleri ve fatura bilgilerini yeniden yükle
-            context = {
-                'invoice': invoice,
-                'payments': payments,
-                'payment_form': payment_form, # Hatalı formu şablona gönder
-                'page_title': f"Fatura Detayı - #{invoice.invoice_number}",
-                'total_paid': total_paid,
-                'remaining_balance': remaining_balance,
-            }
-            return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', context)
-    else:
-        # GET isteği ise, boş bir ödeme formu oluştur
-        payment_form = PaymentForm(user=request.user) # Boş bir form
-        # Ödeme formunda fatura ve sevkiyat alanlarını varsayılan olarak seçili getirmek için
-        # initial değerler atayabiliriz.
-        payment_form.fields['invoice'].initial = invoice
-        if invoice.shipment:
-            payment_form.fields['shipment'].initial = invoice.shipment
-        # Ayrıca, formun fatura veya sevkiyatla ilgili olmayan alanlarını gizleyebiliriz
-        # PaymentForm'da __init__ metodunda bu alanları gizlemek daha iyi olabilir.
-        payment_form.fields['invoice'].widget = forms.HiddenInput()
-        payment_form.fields['shipment'].widget = forms.HiddenInput()
-        payment_form.fields['direction'].widget = forms.HiddenInput() # Otomatik INCOMING olacak
-        payment_form.fields['shipper_company'].widget = forms.HiddenInput() # Otomatik atanacak
+    if invoice.issued_by_shipper != request.user.company and not request.user.is_superuser:
+        messages.error(request, "Bu faturayı görüntüleme izniniz yok.")
+        return redirect('ana_uygulama:invoice_list_nakliyeci')
 
     context = {
         'invoice': invoice,
-        'payments': payments,
-        'payment_form': payment_form,
-        'page_title': f"Fatura Detayı - #{invoice.invoice_number}",
-        'total_paid': total_paid,
-        'remaining_balance': remaining_balance,
+        'page_title': f'{invoice.invoice_number} Detay',
+        'calculated_vat_amount': invoice.total_vat_amount if invoice.total_vat_amount is not None else Decimal('0.00'),
+        'calculated_total_amount': invoice.total_amount if invoice.total_amount is not None else Decimal('0.00'),
     }
     return render(request, 'ana_uygulama/nakliyeci/invoice_detail.html', context)
-
-
 
 @login_required
 def invoice_update_view(request, pk):
@@ -1471,7 +1318,8 @@ def invoice_update_view(request, pk):
             invoice = form.save(commit=False)
             invoice.save() # Bu save çağrısı modeldeki save() metodu ile total_amount'ı günceller.
             messages.success(request, f"Fatura {invoice.invoice_number} başarıyla güncellendi.")
-            return redirect('ana_uygulama:invoice_detail_nakliyeci', invoice_id=invoice.pk) # URL adı düzeltildi
+        return redirect('ana_uygulama:invoice_detail_nakliyeci_view', pk=invoice.pk)
+ # URL adı düzeltildi
     else:
         form = InvoiceForm(instance=invoice, initial={'amount': net_amount_initial, 'vat_rate': invoice.vat_rate})
 
@@ -1483,43 +1331,6 @@ def invoice_update_view(request, pk):
         'page_title': f'Fatura Düzenle {invoice.invoice_number}'
     }
     return render(request, 'ana_uygulama/nakliyeci/invoice_form.html', context)
-
-# Decorator to restrict access to users with a specific company type
-from functools import wraps
-from django.shortcuts import redirect
-from django.contrib import messages
-
-def user_company_type_required(company_type):
-    def decorator(view_func):
-        @wraps(view_func)
-        def _wrapped_view(request, *args, **kwargs):
-            if not hasattr(request.user, 'company') or request.user.company is None or request.user.company.company_type != company_type:
-                messages.error(request, "Bu sayfaya erişim izniniz yok.")
-                return redirect('ana_uygulama:dashboard')
-            return view_func(request, *args, **kwargs)
-        return _wrapped_view
-    return decorator
-
-@login_required
-@user_company_type_required('NAKLIYECI')
-def bank_account_list_nakliyeci_view(request):
-    """
-    Nakliyeci rolü için kendi şirketine ait banka hesaplarını listeler.
-    Kullanıcının şirketinin 'NAKLIYECI' tipinde olması ve giriş yapmış olması gerekir.
-    """
-    # Mevcut kullanıcının şirketine ait banka hesaplarını çekiyoruz
-    # `request.user.company` mevcut kullanıcının ilişkili olduğu Company nesnesidir.
-    bank_accounts = BankAccount.objects.filter(company=request.user.company).order_by('bank_name')
-
-    context = {
-        'bank_accounts': bank_accounts,
-        'page_title': "Banka Hesaplarım",
-        'form': BankAccountForm(), # Yeni hesap ekleme formu için boş bir form da gönderilebilir
-                                 # veya bu, ayrı bir `bank_account_create_nakliyeci_view` içinde yapılır.
-                                 # Eğer bu view'de hem listeleyip hem de ekleme formunu göstermek isterseniz bu satır kalır.
-    }
-    # Şablon yolu: ana_uygulama/templates/ana_uygulama/nakliyeci/bank_account_list.html
-    return render(request, 'ana_uygulama/nakliyeci/bank_account_list.html', context)
 
 @login_required
 def invoice_delete_view(request, pk):
@@ -1579,7 +1390,7 @@ def invoice_create_view(request, shipment_id):
             shipment.save()
 
             messages.success(request, f"Fatura {invoice.invoice_number} başarıyla oluşturuldu ve Sevkiyat #{shipment.pk} faturalandırıldı.")
-            return redirect('ana_uygulama:invoice_detail_nakliyeci', invoice_id=invoice.pk)
+        return redirect('ana_uygulama:invoice_detail_nakliyeci_view', pk=invoice.pk)
     else:
         # Pass initial data for amount if it's based on shipment price
         # Default invoice type and status, current date for issue date
@@ -2478,6 +2289,49 @@ def shipper_create_by_fabrika_view(request):
         'page_title': "Yeni Nakliyeci Ekle"
     }
     return render(request, 'ana_uygulama/fabrika/shipper_create_form.html', context)
+
+def bank_account_list_nakliyeci_view(request):
+    # Banka hesap listesi logic'i buraya gelecek
+    return render(request, 'ana_uygulama/bank_account_list.html')
+
+from django.http import HttpResponseForbidden
+from django.views.decorators.http import require_POST
+
+def nakliyeci_required(view_func):
+    def _wrapped_view(request, *args, **kwargs):
+        if not request.user.is_authenticated or not hasattr(request.user, 'company') or request.user.company.company_type != 'NAKLIYECI':
+            return HttpResponseForbidden("Bu işlemi yapmak için nakliyeci olmalısınız.")
+        return view_func(request, *args, **kwargs)
+    return _wrapped_view
+
+@login_required
+@nakliyeci_required
+@require_POST # Bu view'in sadece POST isteklerini kabul etmesini sağlar
+def mark_invoice_as_paid_ajax(request, invoice_id):
+    try:
+        # Faturayı hem ID'ye hem de isteği yapan kullanıcıya göre güvenli bir şekilde al
+        invoice = get_object_or_404(Invoice, pk=invoice_id, nakliyeci=request.user.profile)
+
+        if invoice.status != 'PAID':
+            invoice.status = 'PAID'
+            invoice.save()
+            return JsonResponse({
+                'status': 'success',
+                'message': f"'{invoice.invoice_number}' numaralı fatura başarıyla 'Ödenmiş' olarak işaretlendi.",
+                # Arayüzü güncellemek için JavaScript'e yeni HTML'i gönderiyoruz.
+                'new_status_html': '<span class="badge bg-success">Ödenmiş</span>' 
+            })
+        else:
+            # Fatura zaten ödenmişse, bir uyarı mesajı döndür.
+            return JsonResponse({
+                'status': 'warning',
+                'message': 'Bu fatura zaten ödenmiş durumda.'
+            }, status=400) # 400 Bad Request durumu
+
+    except Exception as e:
+        # Beklenmedik bir hata oluşursa, bunu loglayıp genel bir hata mesajı dönebiliriz.
+        # logger.error(f"Fatura ödenmiş olarak işaretlenirken hata: {e}")
+        return JsonResponse({'status': 'error', 'message': 'İşlem sırasında bir hata oluştu.'}, status=500)
 
 # --- Kimlik Doğrulama Görünümleri ---
 def logout_view(request):

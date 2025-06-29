@@ -4,7 +4,11 @@
 {% load humanize %} {# Sayıları formatlamak için (örn: 1.000 TL) #}
 
 {% block page_title %}Sevkiyat Detayı{% endblock page_title %}
-
+{% block breadcrumbs %}
+    <li class="breadcrumb-item"><a href="{% url 'ana_uygulama:dashboard' %}">Kontrol Paneli</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'ana_uygulama:shipment_list_nakliyeci' %}">İş Yönetimi</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ page_title }}</li>
+{% endblock breadcrumbs %}
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">

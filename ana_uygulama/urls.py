@@ -25,7 +25,7 @@ urlpatterns = [
 
     # Sevkiyatlar (İşler)
     path('nakliyeci/isler/', views.shipment_list_nakliyeci_view, name='shipment_list_nakliyeci_view'),
-    path('nakliyeci/is/<int:pk>/arac-kaldir/', views.shipment_remove_vehicle_nakliyeci_view, name='shipment_remove_vehicle_nakliyeci_view'), # Hata alınan path
+    # path('nakliyeci/is/<int:pk>/arac-kaldir/', views.shipment_remove_vehicle_nakliyeci_view, name='shipment_remove_vehicle_nakliyeci_view'), # Hata alınan path
     path('nakliyeci/is/yeni/', views.shipment_create_nakliyeci_view, name='shipment_create_nakliyeci_view'),
     path('nakliyeci/is/<int:quote_id>/tekliften-olustur/', views.shipment_create_from_quote_nakliyeci_view, name='shipment_create_from_quote_nakliyeci_view'),
     path('nakliyeci/is/<int:shipment_id>/detay/', views.shipment_detail_nakliyeci_view, name='shipment_detail_nakliyeci_view'),
@@ -61,6 +61,7 @@ urlpatterns = [
     path('nakliyeci/faturalar/<int:pk>/guncelle/', views.invoice_update_view, name='invoice_update_view'),
     path('nakliyeci/faturalar/<int:pk>/odenmis-olarak-isaretle/', views.invoice_mark_as_paid_nakliyeci_view, name='invoice_mark_as_paid_nakliyeci_view'),
     path('nakliyeci/faturalar/<int:pk>/sil/', views.invoice_delete_view, name='invoice_delete_view'),
+    path('api/invoice/<int:invoice_id>/mark-as-paid/', views.mark_invoice_as_paid_ajax, name='api_invoice_mark_as_paid'),
 
 
     # Ödemeler/Tahsilatlar (Nakliyeci)
@@ -71,7 +72,7 @@ urlpatterns = [
     # Banka Hesapları (Nakliyeci Şirketi Kendi Hesapları) - ÖNEMLİ: Modelde Carrier'a bağlı olduğu için bu kısım yorumlandı.
     # Eğer BankAccount doğrudan Company'ye bağlanacaksa models.py güncellenmeli.
     # Şu anki yapıya göre, banka hesapları taşıyıcılara aittir.
-     path('nakliyeci/banka-hesaplari/', views.bank_account_list_nakliyeci_view, name='bank_account_list_nakliyeci_view'),
+    path('nakliyeci/banka-hesaplari/', views.bank_account_list_nakliyeci_view, name='bank_account_list_nakliyeci_view'),
     # path('nakliyeci/banka-hesaplari/yeni/', views.bank_account_create_nakliyeci_view, name='bank_account_create_nakliyeci_view'), # Bu, carrier_id olmadan genel bir ekleme olacağı için şu anki modelle uyumsuz.
     # path('nakliyeci/banka-hesaplari/<int:pk>/detay/', views.bank_account_detail_nakliyeci_view, name='bank_account_detail_nakliyeci_view'),
     # path('nakliyeci/banka-hesaplari/<int:pk>/guncelle/', views.bank_account_update_nakliyeci_view, name='bank_account_update_nakliyeci_view'),
