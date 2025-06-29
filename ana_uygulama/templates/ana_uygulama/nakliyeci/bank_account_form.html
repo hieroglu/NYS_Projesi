@@ -20,7 +20,7 @@
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save"></i> {% if bank_account %}Güncelle{% else %}Ekle{% endif %}
             </button>
-            <a href="{% url 'ana_uygulama:carrier_update_nakliyeci' pk=carrier.id %}" class="btn btn-secondary ms-2">Taşıyıcı Düzenlemeye Dön</a>
+            <a href="{% url 'ana_uygulama:carrier_update_nakliyeci_view' pk=carrier.id %}" class="btn btn-secondary ms-2">Taşıyıcı Düzenlemeye Dön</a>
         </div>
     </form>
 {% endblock %}

@@ -12,7 +12,7 @@
         {% endfor %}
     {% endif %}
 
-    <p><a href="{% if user.company.company_type == 'NAKLIYECI' %}{% url 'ana_uygulama:company_user_create_nakliyeci' %}{% elif user.company.company_type == 'FABRIKA' %}{% url 'ana_uygulama:company_user_create_fabrika' %}{% endif %}" class="btn">Yeni Kullanıcı Ekle</a></p>
+    <p><a href="{% if user.company.company_type == 'NAKLIYECI' %}{% url 'ana_uygulama:company_user_create_nakliyeci_view' %}{% elif user.company.company_type == 'FABRIKA' %}{% url 'ana_uygulama:company_user_create_fabrika_view' %}{% endif %}" class="btn">Yeni Kullanıcı Ekle</a></p>
 
     {% if users %}
         <table>

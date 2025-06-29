@@ -74,15 +74,15 @@
                         <td>
                             {# Detay ve Düzenle butonu - pk yerine vehicle_id kullanıldı #}
                             <a href="{% url 'ana_uygulama:vehicle_detail_nakliyeci_view' vehicle_id=vehicle.pk %}" class="btn btn-sm btn-info me-1" title="Detay/Düzenle">
-                                <i class="fas fa-eye"></i>
+                                <i class="fas fa-eye"></i>Detay/Düzenle
                             </a>
                             <a href="{% url 'ana_uygulama:vehicle_update_nakliyeci_view' vehicle_id=vehicle.pk %}" class="btn btn-sm btn-warning me-1" title="Düzenle">
-                                <i class="fas fa-edit"></i>
+                                <i class="fas fa-edit"></i>Düzenle
                             </a>
                             {# Sil butonu - pk yerine vehicle_id kullanıldı #}
                             <a href="{% url 'ana_uygulama:vehicle_delete_nakliyeci_view' vehicle_id=vehicle.pk %}" class="btn btn-sm btn-danger" title="Sil"
                                onclick="return confirm('Bu aracı silmek istediğinizden emin misiniz?');">
-                                <i class="fas fa-trash-alt"></i>
+                                <i class="fas fa-trash-alt"></i>Sil
                             </a>
                         </td>
                     </tr>

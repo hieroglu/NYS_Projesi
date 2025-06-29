@@ -282,7 +282,7 @@
 
     <div class="row dashboard-row-section">
         {# Aylık İş Hacmi Grafiği #}
-        <div class="col-lg-8 mb-4">
+        <div class="col-lg-1 mb-4">
             <div class="chart-card">
                 <h5 class="recent-activities-card-title">Aylık {{ is_nakliyeci|yesno:"İş Hacmi,Harcama Hacmi" }} (Son 6 Ay)</h5>
                 <canvas id="monthlyVolumeChart"></canvas>
@@ -290,27 +290,7 @@
         </div>
 
         {# Son Hareketler #}
-        <div class="col-lg-4 mb-4">
-            <div class="recent-activities-card h-100">
-                <h5 class="recent-activities-card-title">Son Hareketler</h5>
-                <div class="activities-list">
-                    {% if recent_activities %}
-                        {% for activity in recent_activities %}
-                        <div class="activity-item">
-                            <i class="{{ activity.icon }} activity-icon"></i>
-                            <div class="activity-details">
-                                <div class="activity-message">{{ activity.message }}</div>
-                                <div class="activity-date">{{ activity.date|date:"d M Y H:i" }}</div>
-                            </div>
-                            <a href="{{ activity.url }}" class="activity-link">Detay <i class="fas fa-chevron-right"></i></a>
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        <p class="text-muted">Son hareket bulunmamaktadır.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+        
     </div>
 
     {# Araç Uyarıları (Sadece Nakliyeciler için) #}

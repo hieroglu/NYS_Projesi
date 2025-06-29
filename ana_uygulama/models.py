@@ -6,6 +6,10 @@ from django.core.validators import FileExtensionValidator
 from decimal import Decimal
 from django.conf import settings # AUTH_USER_MODEL için gerekli
 from django.db.models import Sum # Sum için eklendi
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+from django.urls import reverse
+from django.utils.html import format_html
 
 # 1. Company (Firma) Modeli
 class Company(models.Model):
@@ -370,6 +374,32 @@ class Shipment(models.Model):
         ordering = ['-created_at']
 
 
+class Expense(models.Model):
+    """
+    Nakliyecinin operasyonel giderlerini kaydetmek için kullanılır.
+    """
+    class CategoryChoices(models.TextChoices):
+        FUEL = 'FUEL', 'Yakıt'
+        MAINTENANCE = 'MAINTENANCE', 'Bakım & Onarım'
+        SALARY = 'SALARY', 'Maaş'
+        TAX = 'TAX', 'Vergi & Harç'
+        OTHER = 'OTHER', 'Diğer'
+
+    profile = models.ForeignKey(CustomUser, on_delete=models.CASCADE, verbose_name="Kullanıcı Profili")
+    category = models.CharField(max_length=20, choices=CategoryChoices.choices, default=CategoryChoices.OTHER, verbose_name="Kategori")
+    description = models.CharField(max_length=255, verbose_name="Açıklama")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Tutar (TL)")
+    expense_date = models.DateField(verbose_name="Gider Tarihi")
+    
+    class Meta:
+        ordering = ['-expense_date']
+        verbose_name = "Gider"
+        verbose_name_plural = "Giderler"
+
+    def __str__(self):
+        return f"{self.get_category_display()} - {self.amount} TL ({self.expense_date.strftime('%d.%m.%Y')})"
+
+
 # 8. Invoice (Fatura) Modeli
 class Invoice(models.Model):
     TYPE_CHOICES = [
@@ -513,7 +543,78 @@ class Invoice(models.Model):
         # Vadesi geçmemiş ve ödeme yapılmamışsa, durumu 'Gönderildi'dir.
             self.status = 'SENT'
 
+class ActivityLog(models.Model):
+    """
+    Sistemdeki önemli kullanıcı hareketlerini kaydetmek için kullanılır.
+    """
+    class ActionTypes(models.TextChoices):
+        INVOICE_CREATED = 'INVOICE_CREATED', 'Fatura Oluşturuldu'
+        PAYMENT_RECEIVED = 'PAYMENT_RECEIVED', 'Ödeme Alındı'
+        VEHICLE_ADDED = 'VEHICLE_ADDED', 'Araç Eklendi'
+        BID_SUBMITTED = 'BID_SUBMITTED', 'Teklif Verildi'
+        SHIPMENT_COMPLETED = 'SHIPMENT_COMPLETED', 'Sevkiyat Tamamlandı'
 
+    profile = models.ForeignKey(CustomUser, on_delete=models.CASCADE, verbose_name="Kullanıcı Profili")
+    action_type = models.CharField(max_length=50, choices=ActionTypes.choices, verbose_name="Eylem Türü")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Zaman Damgası")
+    description = models.TextField(verbose_name="Açıklama")
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Aktivite Kaydı"
+        verbose_name_plural = "Aktivite Kayıtları"
+
+    def __str__(self):
+        return f"{self.profile.user.username} - {self.get_action_type_display()} - {self.timestamp.strftime('%d.%m.%Y %H:%M')}"
+
+    # --- YENİ EKLENEN AKILLI ÖZELLİKLER ---
+
+    @property
+    def message(self):
+        """Template'de {{ activity.message }} olarak kullanılacak."""
+        return self.description
+
+    @property
+    def date(self):
+        """Template'de {{ activity.date }} olarak kullanılacak."""
+        return self.timestamp
+
+    @property
+    def icon(self):
+        """Eylem türüne göre bir Font Awesome ikonu döndürür."""
+        if self.action_type == self.ActionTypes.INVOICE_CREATED:
+            return "fas fa-file-invoice-dollar"
+        elif self.action_type == self.ActionTypes.PAYMENT_RECEIVED:
+            return "fas fa-hand-holding-usd"
+        elif self.action_type == self.ActionTypes.VEHICLE_ADDED:
+            return "fas fa-truck"
+        elif self.action_type == self.ActionTypes.BID_SUBMITTED:
+            return "fas fa-gavel"
+        elif self.action_type == self.ActionTypes.SHIPMENT_COMPLETED:
+            return "fas fa-check-circle"
+        return "fas fa-bell" # Varsayılan ikon
+
+    @property
+    def url(self):
+        """İlişkili nesnenin detay URL'ini oluşturur."""
+        try:
+            if isinstance(self.content_object, Invoice):
+                # Faturanın detay URL'ini oluştur
+                return reverse('ana_uygulama:invoice_detail_nakliyeci', kwargs={'pk': self.content_object.pk})
+            elif isinstance(self.content_object, Vehicle):
+                # Aracın detay URL'ini oluştur (eğer varsa)
+                # return reverse('ana_uygulama:vehicle_detail', kwargs={'pk': self.content_object.pk})
+                pass
+            # Diğer modeller için de benzer 'elif' blokları eklenebilir.
+        except:
+            # URL oluşturulamazsa veya ilgili sayfa yoksa, boş bir link döner.
+            return "#"
+        return "#"
+    
 # 9. Payment (Ödeme/Tahsilat) Modeli
 class Payment(models.Model):
     DIRECTION_CHOICES = [

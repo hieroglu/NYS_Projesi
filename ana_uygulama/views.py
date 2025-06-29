@@ -2,6 +2,7 @@
 import calendar
 import json
 from django.conf import settings
+from dateutil.relativedelta import relativedelta
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -13,6 +14,7 @@ from django.db.models import Sum, F, Q
 from django.urls import reverse
 from django.db.models.functions import TruncMonth # Ay bazında gruplama için
 from django.http import JsonResponse
+from .models import ActivityLog,Expense 
 
 # Model imports
 from .models import (
@@ -625,7 +627,7 @@ def shipment_update_nakliyeci_view(request, shipment_id):
 
     if shipment_to_update.status in ['DELIVERED', 'BILLED', 'CANCELLED', 'COMPLETED']:
         messages.error(request, f"İş (ID: {shipment_to_update.id}) durumu '{shipment_to_update.get_status_display()}' olduğu için düzenlenemez.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment_id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment_id)
 
     if request.method == 'POST':
         form = ShipmentFormNakliyeci(request.POST, request.FILES, instance=shipment_to_update, request_user_company=current_shipper_company)
@@ -700,7 +702,7 @@ def assign_vehicle_to_shipment_view(request, shipment_id):
     # Check if the shipment status allows vehicle assignment/unassignment
     if shipment.status not in ['PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_TRANSIT']:
         messages.error(request, f"Bu iş için araç atama/boşa alma yapılamaz. Durum: {shipment.get_status_display()}")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
 
     current_shipper_company = request.user.company
 
@@ -777,7 +779,7 @@ def update_shipment_status_nakliyeci_view(request, shipment_id):
     shipment = get_object_or_404(Shipment, id=shipment_id, shipper_company=request.user.company)
     if shipment.status in ['BILLED', 'CANCELLED', 'COMPLETED']:
         messages.error(request, f"Durumu '{shipment.get_status_display()}' olan bir işin durumu değiştirilemez.")
-        return redirect('ana_uygulama:shipment_detail_nakliyeci', shipment_id=shipment.id)
+        return redirect('ana_uygulama:shipment_detail_nakliyeci_view', shipment_id=shipment.id)
 
     if request.method == 'POST':
         form = ShipmentStatusUpdateForm(request.POST, instance=shipment)
@@ -906,9 +908,9 @@ def vehicle_update_nakliyeci_view(request, vehicle_id):
                 messages.success(request, f"Araç {vehicle_to_update.plate_number} başarıyla güncellendi.")
                 return redirect('ana_uygulama:vehicle_list_nakliyeci')
             except Exception as e:
-                messages.error(request, f"Araç güncellenirken bir hata oluştu: {e}.")
+                messages.debug(request, f"Araç güncellenirken bir hata oluştu: {e}.")
         else:
-            messages.error(request, "Lütfen formdaki hataları düzeltin.")
+            messages.warning(request, "Lütfen formdaki hataları düzeltin.")
     else:
         form = VehicleForm(instance=vehicle_to_update, request_user_company=current_nakliyeci_company)
 
@@ -1591,8 +1593,7 @@ def company_list_for_nakliyeci_view(request):
         nakliyeciler = nakliyeciler.filter(name__icontains=nakliyeci_firmasi_filter)
 
     # Exclude the user's own company from the shipper list
-    if request.user.company and request.user.company.company_type == 'NAKLIYECI':
-        nakliyeciler = nakliyeciler.exclude(pk=request.user.company.pk)
+    
 
     context = {
         'fabrikalar': fabrikalar,
@@ -2094,6 +2095,64 @@ def global_search_view(request):
 
     return render(request, 'ana_uygulama/search_results.html', context)
 
+@login_required
+def dashboard_nakliyeci_view(request):
+    user_profile = request.user.profile
+
+    # --- Diğer Dashboard Verileri (Bu kısım doğruydu) ---
+    aktif_isler_sayisi = Invoice.objects.filter(nakliyeci=user_profile, status__in=['SENT', 'PARTIALLY_PAID', 'OVERDUE']).count()
+    arac_sayisi = Vehicle.objects.filter(owner=user_profile).count()
+    recent_activities = ActivityLog.objects.filter(profile=user_profile)[:5]
+    
+    # --- AYLIK İŞ HACMİ VE KÂR HESAPLAMASI (DOĞRU VE BASİT HALİ) ---
+    today = timezone.localdate()
+    
+    labels = []
+    income_data = [] # İş Hacmi / Gelir
+    profit_data = [] # Tahmini Kâr
+
+    for i in range(5, -1, -1): # Son 6 ay için döngü
+        target_date = today - relativedelta(months=i)
+        month_start = target_date.replace(day=1)
+        next_month = month_start + relativedelta(months=1)
+        month_end = next_month - timedelta(days=1)
+        
+        # O ay içinde VADESİ GELEN tüm faturaları (kesilen faturalar) topla
+        # Sadece ödenmiş olanları değil, tüm iş hacmini görmek için.
+        monthly_income = Invoice.objects.filter(
+            nakliyeci=user_profile,
+            due_date__range=[month_start, month_end],
+            status__in=['SENT', 'PARTIALLY_PAID', 'OVERDUE', 'PAID'] # İptal olmayan tümü
+        ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+
+        # BASİT KÂR HESAPLAMASI:
+        # Gerçek gider verimiz olmadığı için, kârı iş hacminin %20'si olarak varsayalım.
+        # Bu, ileride kolayca değiştirebileceğimiz bir başlangıç noktasıdır.
+        monthly_profit = monthly_income * Decimal('0.20')
+        
+        # Türkçe ay isimleri
+        turkish_months = {1: "Oca", 2: "Şub", 3: "Mar", 4: "Nis", 5: "May", 6: "Haz", 7: "Tem", 8: "Ağu", 9: "Eyl", 10: "Eki", 11: "Kas", 12: "Ara"}
+        labels.append(f"{turkish_months[month_start.month]} {month_start.year}")
+        
+        income_data.append(float(monthly_income))
+        profit_data.append(float(monthly_profit))
+    
+    chart_data = {
+        'labels': labels,
+        'income': income_data,
+        'profit': profit_data,
+    }
+    # ----------------------------------------------------
+
+    context = {
+        'page_title': 'Nakliyeci Kontrol Paneli',
+        'aktif_isler_sayisi': aktif_isler_sayisi,
+        'arac_sayisi': arac_sayisi,
+        'recent_activities': recent_activities,
+        'chart_data_json': json.dumps(chart_data), # Veriyi JSON olarak template'e gönder
+    }
+    return render(request, 'ana_uygulama/nakliyeci/dashboard.html', context)
+
 
 @login_required
 def ajax_live_search_view(request):
@@ -2290,9 +2349,25 @@ def shipper_create_by_fabrika_view(request):
     }
     return render(request, 'ana_uygulama/fabrika/shipper_create_form.html', context)
 
+@login_required
 def bank_account_list_nakliyeci_view(request):
-    # Banka hesap listesi logic'i buraya gelecek
-    return render(request, 'ana_uygulama/bank_account_list.html')
+    """
+    Nakliyeci firmanın yönettiği tüm taşıyıcıların banka hesaplarını listeler.
+    """
+    if not request.user.company or request.user.company.company_type != 'NAKLIYECI':
+        messages.error(request, "Bu sayfaya erişim izniniz yok.")
+        return redirect('ana_uygulama:dashboard')
+
+    # Nakliyecinin yönettiği tüm taşıyıcıların banka hesaplarını getir
+    bank_accounts = BankAccount.objects.filter(
+        carrier__managed_by_shipper=request.user.company
+    ).select_related('carrier').order_by('carrier__full_name', 'bank_name')
+
+    context = {
+        'bank_accounts': bank_accounts,
+        'page_title': "Banka Hesapları"
+    }
+    return render(request, 'ana_uygulama/nakliyeci/bank_account_list.html', context)
 
 from django.http import HttpResponseForbidden
 from django.views.decorators.http import require_POST

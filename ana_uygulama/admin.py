@@ -4,6 +4,8 @@ from django.contrib.auth.admin import UserAdmin # CustomUser için
 from .models import (
     Company, CustomUser, Carrier, BankAccount, Vehicle, 
     QuoteRequest, Shipment, Invoice, Payment )
+from .models import ActivityLog
+from .models import Expense
 
 # CustomUser için admin ayarlarını özelleştirebiliriz
 class CustomUserAdmin(UserAdmin):
@@ -31,6 +33,12 @@ class CarrierAdmin(admin.ModelAdmin):
     search_fields = ('full_name', 'tax_id_number', 'phone', 'email')
     raw_id_fields = ('managed_by_shipper',)
     inlines = [BankAccountInline]
+
+@admin.register(Expense)
+class ExpenseAdmin(admin.ModelAdmin):
+    list_display = ('expense_date', 'profile', 'category', 'amount', 'description')
+    list_filter = ('category', 'expense_date', 'profile')
+    search_fields = ('description',)
 
 # VehicleAdmin (Bir önceki yanıtta tanımlamıştık)
 class VehicleAdmin(admin.ModelAdmin):
@@ -104,6 +112,11 @@ class PaymentAdmin(admin.ModelAdmin):
 
 # Sadece bir VehicleAdmin ve bir CarrierAdmin tanımı bırakılmalı, tekrar eden tanımlar kaldırıldı.
 # Ayrıca VehicleAdmin ve CarrierAdmin tanımlarının sadece bir tane olduğundan emin ol.
+
+@admin.register(ActivityLog)
+class ActivityLogAdmin(admin.ModelAdmin):
+    list_display = ('timestamp', 'profile', 'action_type', 'description', 'content_object')
+    list_filter = ('action_type', 'profile')
 
 admin.site.register(CustomUser, CustomUserAdmin)
 admin.site.register(Company, CompanyAdmin)

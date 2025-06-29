@@ -18,5 +18,5 @@
         <button type="submit" class="btn">Kullanıcıyı Kaydet</button>
     </form>
 
-    <a href="{% if user.company.company_type == 'NAKLIYECI' %}{% url 'ana_uygulama:company_user_list_nakliyeci' %}{% elif user.company.company_type == 'FABRIKA' %}{% url 'ana_uygulama:company_user_list_fabrika' %}{% endif %}" class="btn">Geri Dön</a>
+    <a href="{% if user.company.company_type == 'NAKLIYECI' %}{% url 'ana_uygulama:company_user_list_nakliyeci_view' %}{% elif user.company.company_type == 'FABRIKA' %}{% url 'ana_uygulama:company_user_list_fabrika' %}{% endif %}" class="btn">Geri Dön</a>
 {% endblock %}

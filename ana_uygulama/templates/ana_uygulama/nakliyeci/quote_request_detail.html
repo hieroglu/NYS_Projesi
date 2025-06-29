@@ -63,7 +63,7 @@
 
             {# YENİ: İŞİ DÜZENLE BUTONU #}
             {% if related_shipment and related_shipment.shipper_company == request.user.company %}
-                <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci' shipment_id=related_shipment.id %}" class="btn btn-success ms-2">
+                <a href="{% url 'ana_uygulama:shipment_detail_nakliyeci_view' shipment_id=related_shipment.id %}" class="btn btn-success ms-2">
                     <i class="fas fa-truck-loading"></i> İşi Görüntüle/Düzenle (#{{ related_shipment.id }})
                 </a>
             {% elif quote_request.status == 'ACCEPTED' and quote_request.priced_by_shipper_company == request.user.company and not related_shipment %}
@@ -73,7 +73,7 @@
                 </a>
             {% endif %}
 
-            <a href="{% url 'ana_uygulama:quote_request_list_nakliyeci' %}" class="btn btn-secondary ms-2"><i class="fas fa-arrow-left"></i> Listeye Dön</a>
+            <a href="{% url 'ana_uygulama:quote_request_list_nakliyeci_view' %}" class="btn btn-secondary ms-2"><i class="fas fa-arrow-left"></i> Listeye Dön</a>
         </div>
     </div>
 {% endblock %}

@@ -110,8 +110,8 @@
                                         {% if bank_account.is_primary %}<span class="badge bg-success mt-1">Birincil Hesap</span>{% endif %}
                                     </div>
                                     <div class="align-self-center">
-                                        <a href="{% url 'ana_uygulama:carrier_bank_account_edit' carrier_id=carrier.id pk=bank_account.pk %}" class="btn btn-sm btn-outline-info me-1" title="Düzenle"><i class="fas fa-edit"></i></a>
-                                        <a href="{% url 'ana_uygulama:carrier_bank_account_delete' carrier_id=carrier.id pk=bank_account.pk %}" class="btn btn-sm btn-outline-danger" title="Sil" onclick="return confirm('Bu banka hesabını silmek istediğinizden emin misiniz?');"><i class="fas fa-trash"></i></a>
+                                        <a href="{% url 'ana_uygulama:carrier_bank_account_edit_view' carrier_id=carrier.id pk=bank_account.pk %}" class="btn btn-sm btn-outline-info me-1" title="Düzenle"><i class="fas fa-edit"></i></a>
+                                        <a href="{% url 'ana_uygulama:carrier_bank_account_delete_view' carrier_id=carrier.id pk=bank_account.pk %}" class="btn btn-sm btn-outline-danger" title="Sil" onclick="return confirm('Bu banka hesabını silmek istediğinizden emin misiniz?');"><i class="fas fa-trash"></i></a>
                                     </div>
                                 </div>
                             </div>
@@ -120,7 +120,7 @@
                         <p class="text-muted">Bu taşıyıcı için kayıtlı banka hesabı bulunmamaktadır.</p>
                     {% endfor %}
                 </div>
-                <a href="{% url 'ana_uygulama:carrier_bank_account_add' carrier_id=carrier.id %}" class="btn btn-success"><i class="fas fa-plus"></i> Yeni Banka Hesabı Ekle</a>
+                <a href="{% url 'ana_uygulama:carrier_bank_account_add_view' carrier_id=carrier.id %}" class="btn btn-success"><i class="fas fa-plus"></i> Yeni Banka Hesabı Ekle</a>
                 {% endif %}
 
                 {# ------------------- KAYDET / İPTAL BUTONLARI ------------------- #}
@@ -128,7 +128,7 @@
                     <button type="submit" class="btn btn-primary"> {# Buton rengini primary yaptım, isterseniz değiştirebilirsiniz #}
                         <i class="fas fa-save"></i> {% if carrier %}Değişiklikleri Kaydet{% else %}Taşıyıcıyı Kaydet{% endif %}
                     </button>
-                    <a href="{% if carrier %}{% url 'ana_uygulama:carrier_detail_nakliyeci' pk=carrier.id %}{% else %}{% url 'ana_uygulama:carrier_list_nakliyeci' %}{% endif %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
+                    <a href="{% if carrier %}{% url 'ana_uygulama:carrier_detail_nakliyeci_view' pk=carrier.id %}{% else %}{% url 'ana_uygulama:carrier_list_nakliyeci_view' %}{% endif %}" class="btn btn-secondary ms-2"><i class="fas fa-times"></i> İptal</a>
                 </div>
             </form>
         </div>
